@@ -1,0 +1,324 @@
+@import "tailwindcss";
+
+/* ─── Design tokens (Retro-Futuristic Terminal) ─── */
+:root {
+  /* Surface & containers (tonal layering, no drop shadows) */
+  --color-surface: #131314;
+  --color-on-surface: #e5e2e3;
+  --color-surface-container-lowest: #0e0e0f;
+  --color-surface-container-low: #161617;
+  --color-surface-container: #1e1f20;
+  --color-surface-container-high: #29282a;
+  --color-surface-container-highest: #353436;
+
+  /* Brand */
+  --color-primary: #6feee1;
+  --color-primary-dim: #5adace;
+  --color-secondary: #bcc7de;
+  --color-on-primary: #0e0e0f;
+
+  /* Borders & outlines */
+  --color-outline: #869491;
+  --color-outline-variant: #3c4947;
+
+  /* Semantic */
+  --color-error: #ffb4ab;
+  --color-on-error: #440006;
+
+  /* CRT / luminescence */
+  --color-crt-glow: color-mix(in srgb, var(--color-primary) 55%, transparent);
+  --color-crt-glow-soft: color-mix(in srgb, var(--color-primary) 28%, transparent);
+
+  /* Layout rhythm */
+  --space-unit: 4px;
+  --dot-matrix-gap: 24px;
+  --progress-height: 2px;
+  --playhead-size: 10px;
+
+  /* Motion */
+  --ease-terminal: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-pulse: 2.4s;
+  --dur-blink: 1.05s;
+  --dur-scanline: 8s;
+
+  /* Typography (next/font sets --font-space-grotesk / --font-inter on <html>) */
+  --font-headline: var(--font-space-grotesk, "Space Grotesk", ui-sans-serif, system-ui, sans-serif);
+  --font-body: var(--font-inter, "Inter", ui-sans-serif, system-ui, sans-serif);
+  --tracking-headline: 0.08em;
+  --tracking-label: 0.12em;
+}
+
+@theme inline {
+  /* Typography → font-sans / font-display utilities */
+  --font-body: var(--font-inter, "Inter", ui-sans-serif, system-ui, sans-serif);
+  --font-headline: var(--font-space-grotesk, "Space Grotesk", ui-sans-serif, system-ui, sans-serif);
+  --font-sans: var(--font-body);
+  --font-display: var(--font-headline);
+
+  /* Colors → Tailwind utilities (bg-*, text-*, border-*, ring-*) */
+  --color-surface: #131314;
+  --color-on-surface: #e5e2e3;
+  --color-surface-container-lowest: #0e0e0f;
+  --color-surface-container-low: #161617;
+  --color-surface-container: #1e1f20;
+  --color-surface-container-high: #29282a;
+  --color-surface-container-highest: #353436;
+  --color-primary: #6feee1;
+  --color-primary-dim: #5adace;
+  --color-secondary: #bcc7de;
+  --color-on-primary: #0e0e0f;
+  --color-outline: #869491;
+  --color-outline-variant: #3c4947;
+  --color-error: #ffb4ab;
+  --color-on-error: #440006;
+  --color-background: #131314;
+  --color-foreground: #e5e2e3;
+
+  /* Animations */
+  --animate-glow-pulse: glow-pulse 1.5s ease-in-out infinite;
+}
+
+/* ─── Keyframes ─── */
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+    filter: brightness(1);
+  }
+  50% {
+    opacity: 0.82;
+    filter: brightness(1.35);
+  }
+}
+
+@keyframes blink {
+  0%,
+  45% {
+    opacity: 1;
+  }
+  50%,
+  95% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes thinking-dot {
+  0%, 80%, 100% { opacity: 0.2; }
+  40% { opacity: 1; }
+}
+
+@keyframes glow-pulse {
+  0%,
+  100% {
+    opacity: 0.5;
+    filter: brightness(0.8) blur(0.5px);
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    filter: brightness(1.6) blur(0px);
+    transform: scale(1.25);
+  }
+}
+
+@keyframes scanline {
+  0% {
+    transform: translateY(-100%);
+    opacity: 0.06;
+  }
+  35% {
+    opacity: 0.12;
+  }
+  100% {
+    transform: translateY(100%);
+    opacity: 0.06;
+  }
+}
+
+/* ─── Base ─── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background-color: var(--color-surface);
+  color: var(--color-on-surface);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 24px;
+  letter-spacing: 0.01em;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-headline);
+  letter-spacing: var(--tracking-headline);
+  font-weight: 600;
+}
+
+label,
+.terminal-label {
+  font-family: var(--font-headline);
+  letter-spacing: var(--tracking-label);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+}
+
+/* ─── Utilities ─── */
+.crt-glow {
+  box-shadow:
+    inset 0 0 48px var(--color-crt-glow-soft),
+    inset 0 0 120px color-mix(in srgb, var(--color-primary) 12%, transparent);
+  outline: 1px solid var(--color-outline-variant);
+}
+
+.dot-matrix-bg {
+  background-color: var(--color-surface);
+  background-image: radial-gradient(
+    circle at center,
+    var(--color-outline-variant) 0,
+    var(--color-outline-variant) 1px,
+    transparent 1px,
+    transparent 100%
+  );
+  background-size: var(--dot-matrix-gap) var(--dot-matrix-gap);
+  background-position: 0 0;
+}
+
+.scanline-overlay {
+  position: relative;
+  overflow: hidden;
+}
+
+.scanline-overlay::after {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 2px,
+    color-mix(in srgb, var(--color-on-surface) 4%, transparent) 2px,
+    color-mix(in srgb, var(--color-on-surface) 4%, transparent) 3px
+  );
+  mix-blend-mode: soft-light;
+  animation: scanline var(--dur-scanline) linear infinite;
+}
+
+.terminal-on-air {
+  animation: pulse var(--dur-pulse) var(--ease-terminal) infinite;
+}
+
+.colon-blink {
+  animation: blink 1s steps(1) infinite;
+}
+
+.terminal-cursor-block {
+  display: inline-block;
+  width: 0.55em;
+  min-height: 1em;
+  background: var(--color-primary);
+  vertical-align: text-bottom;
+  animation: blink var(--dur-blink) steps(1, end) infinite;
+}
+
+/* 2px progress track + glowing playhead (no drop shadow — glow via box-shadow / filter) */
+.terminal-progress {
+  position: relative;
+  height: var(--progress-height);
+  width: 100%;
+  border-radius: 1px;
+  background-color: var(--color-surface-container-high);
+  box-shadow: inset 0 0 0 1px var(--color-outline-variant);
+}
+
+.terminal-progress-fill {
+  height: 100%;
+  width: var(--progress-pct, 0%);
+  max-width: 100%;
+  background: linear-gradient(
+    90deg,
+    var(--color-primary-dim),
+    var(--color-primary)
+  );
+  border-radius: 1px;
+  box-shadow:
+    0 0 8px color-mix(in srgb, var(--color-primary) 70%, transparent),
+    0 0 24px color-mix(in srgb, var(--color-primary) 35%, transparent);
+}
+
+.terminal-progress-head {
+  position: absolute;
+  top: 50%;
+  left: var(--progress-pct, 0%);
+  width: var(--playhead-size);
+  height: var(--playhead-size);
+  margin-top: calc(var(--playhead-size) / -2);
+  margin-left: calc(var(--playhead-size) / -2);
+  border-radius: 2px;
+  background-color: var(--color-primary);
+  border: 1px solid color-mix(in srgb, var(--color-primary) 60%, white);
+  box-shadow:
+    0 0 6px color-mix(in srgb, var(--color-primary) 90%, transparent),
+    0 0 18px color-mix(in srgb, var(--color-primary) 45%, transparent);
+}
+
+.terminal-progress-crab {
+  position: absolute;
+  top: 50%;
+  left: var(--progress-pct, 0%);
+  transform: translate(-50%, -50%);
+  filter:
+    drop-shadow(0 0 4px color-mix(in srgb, var(--color-primary) 80%, transparent))
+    drop-shadow(0 0 12px color-mix(in srgb, var(--color-primary) 40%, transparent));
+  cursor: grab;
+  transition: left 0.1s linear;
+}
+
+.terminal-progress-crab:active {
+  cursor: grabbing;
+}
+
+/* ─── Scrollbars (thin, dark) ─── */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-outline-variant) var(--color-surface-container-lowest);
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--color-surface-container-lowest);
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--color-outline-variant);
+  border-radius: 4px;
+  border: 2px solid var(--color-surface-container-lowest);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--color-outline);
+}

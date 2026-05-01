@@ -1,0 +1,198 @@
+"use client";
+
+import { Label } from "@/app/components/atoms/Label";
+import type { Track } from "@/app/lib/types";
+import { usePlayer } from "@/app/context/PlayerContext";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+function fmtSec(s: number): string {
+  if (!Number.isFinite(s) || s <= 0) return "—";
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return `${m}:${sec.toString().padStart(2, "0")}`;
+}
+
+function useDurationMap(tracks: Track[]) {
+  const [map, setMap] = useState<Record<string, number>>({});
+  const pending = useRef(new Set<string>());
+
+  useEffect(() => {
+    for (const t of tracks) {
+      if (map[t.id] != null || pending.current.has(t.id)) continue;
+      pending.current.add(t.id);
+
+      const audio = new Audio();
+      audio.preload = "metadata";
+      const id = t.id;
+      audio.addEventListener(
+        "loadedmetadata",
+        () => {
+          const dur = audio.duration;
+          if (Number.isFinite(dur) && dur > 0) {
+            setMap((prev) => ({ ...prev, [id]: dur }));
+          }
+          pending.current.delete(id);
+          audio.src = "";
+        },
+        { once: true }
+      );
+      audio.addEventListener(
+        "error",
+        () => {
+          pending.current.delete(id);
+          audio.src = "";
+        },
+        { once: true }
+      );
+      audio.src = t.url;
+    }
+  }, [tracks, map]);
+
+  return map;
+}
+
+export function Playlist() {
+  const { state, playTrack } = usePlayer();
+  const [filter, setFilter] = useState("");
+
+  const allTracks = state.playlist;
+  const durMap = useDurationMap(allTracks);
+
+  const q = filter.trim().toLowerCase();
+  const rows = useMemo(() => {
+    if (!q.length) return allTracks;
+    return allTracks.filter((t) => {
+      const hay = `${t.title} ${t.author} ${t.filename}`.toLowerCase();
+      return hay.includes(q);
+    });
+  }, [allTracks, q]);
+
+  const onRowClick = useCallback(
+    (track: Track) => {
+      playTrack(track);
+    },
+    [playTrack]
+  );
+
+  return (
+    <div
+      className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-sm border"
+      style={{
+        borderColor: "var(--color-surface-container-high)",
+        backgroundColor: "var(--color-surface-container-low)",
+      }}
+    >
+      <div
+        className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b px-3 py-2 md:px-4"
+        style={{ borderColor: "var(--color-outline-variant)" }}
+      >
+        <div className="flex flex-wrap items-baseline gap-2">
+          <Label size="md">ACTIVE_QUEUE.LOG</Label>
+          <span
+            className="text-[12px] tabular-nums opacity-72"
+            style={{ fontFamily: "var(--font-body)" }}
+          >
+            [{rows.length}/{allTracks.length}]
+          </span>
+        </div>
+      </div>
+
+      <div className="shrink-0 px-3 py-2 md:px-4">
+        <label className="sr-only" htmlFor="playlist-search">
+          Filter queue
+        </label>
+        <input
+          id="playlist-search"
+          type="search"
+          placeholder="FILTER…"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          autoCapitalize="off"
+          autoCorrect="off"
+          spellCheck={false}
+          className="w-full rounded-sm border px-3 py-2 text-sm outline-none transition-colors placeholder:uppercase placeholder:tracking-[0.14em]"
+          style={{
+            fontFamily: "var(--font-body)",
+            borderColor: "var(--color-outline-variant)",
+            backgroundColor: "var(--color-surface-container-lowest)",
+            color: "var(--color-on-surface)",
+          }}
+        />
+      </div>
+
+      {allTracks.length === 0 ? (
+        <div className="flex flex-1 items-center justify-center px-4 py-6">
+          <p
+            className="text-center text-xs uppercase tracking-[0.14em] opacity-50"
+            style={{ fontFamily: "var(--font-headline)" }}
+          >
+            QUEUE_EMPTY — 通过右侧 Agent 对话添加歌曲
+          </p>
+        </div>
+      ) : rows.length === 0 ? (
+        <p className="px-3 py-4 text-sm opacity-60 md:px-4" style={{ fontFamily: "var(--font-body)" }}>
+          NO_MATCHES
+        </p>
+      ) : (
+        <div className="min-h-0 flex-1 overflow-auto scrollbar-thin">
+          <table className="w-full border-collapse text-left text-sm">
+            <thead className="sticky top-0 z-[1]" style={{ backgroundColor: "var(--color-surface-container)" }}>
+              <tr style={{ borderBottom: "1px solid var(--color-outline-variant)" }}>
+                <th
+                  className="w-10 px-2 py-2 text-[11px] font-semibold uppercase tracking-[0.14em]"
+                  style={{ fontFamily: "var(--font-headline)", color: "var(--color-outline)" }}
+                >
+                  #
+                </th>
+                <th
+                  className="px-2 py-2 text-[11px] font-semibold uppercase tracking-[0.14em]"
+                  style={{ fontFamily: "var(--font-headline)", color: "var(--color-outline)" }}
+                >
+                  TITLE
+                </th>
+                <th
+                  className="w-20 shrink-0 px-2 py-2 text-[11px] font-semibold uppercase tracking-[0.14em]"
+                  style={{ fontFamily: "var(--font-headline)", color: "var(--color-outline)" }}
+                >
+                  DUR
+                </th>
+              </tr>
+            </thead>
+            <tbody style={{ fontFamily: "var(--font-body)", color: "var(--color-on-surface)" }}>
+              {rows.map((t, idx) => {
+                const active = state.current?.id === t.id;
+                return (
+                  <tr
+                    key={t.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => onRowClick(t)}
+                    onKeyDown={(e) => {
+                      if (e.key !== "Enter" && e.key !== " ") return;
+                      e.preventDefault();
+                      onRowClick(t);
+                    }}
+                    className="cursor-pointer transition-colors hover:bg-[color-mix(in_srgb,var(--color-surface-container-high)_55%,transparent)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[color:var(--color-primary)] focus-visible:ring-inset focus-visible:bg-[color-mix(in_srgb,var(--color-surface-container-high)_55%,transparent)]"
+                    style={{
+                      borderLeftWidth: "3px",
+                      borderLeftStyle: "solid",
+                      borderLeftColor: active ? "var(--color-primary)" : "transparent",
+                    }}
+                  >
+                    <td className="w-10 shrink-0 px-2 py-2.5 tabular-nums text-[color:var(--color-outline)]">
+                      {idx + 1}
+                    </td>
+                    <td className="max-w-0 truncate px-2 py-2.5">{t.title}</td>
+                    <td className="w-20 shrink-0 px-2 py-2.5 text-right tabular-nums opacity-82">
+                      {active && state.duration > 0 ? fmtSec(state.duration) : fmtSec(durMap[t.id])}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
