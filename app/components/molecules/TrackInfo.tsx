@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { Track } from "@/app/lib/types";
+import { SpectrumBars } from "@/app/components/atoms/SpectrumBars";
 
 const MARQUEE_KF =
   "@keyframes pcb-mq{0%{transform:translateX(0)}100%{transform:translateX(calc(var(--mq-offset)*-1))}}";
@@ -10,9 +11,10 @@ const MQ_SPEED = 40;
 
 type Props = {
   track: Track | null;
+  playing: boolean;
 };
 
-export function TrackInfo({ track }: Props) {
+export function TrackInfo({ track, playing }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const textRef = useRef<HTMLSpanElement>(null);
   const [textWidth, setTextWidth] = useState(0);
@@ -86,18 +88,21 @@ export function TrackInfo({ track }: Props) {
           </span>
         )}
       </div>
-      <span
-        className="w-fit rounded-sm border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em]"
-        style={{
-          fontFamily: "var(--font-headline)",
-          borderColor: hasTrack ? "var(--color-primary)" : "var(--color-outline-variant)",
-          color: hasTrack ? "var(--color-primary)" : "var(--color-outline)",
-          boxShadow: hasTrack ? "0 0 12px var(--color-crt-glow-soft)" : "none",
-          opacity: hasTrack ? 1 : 0.45,
-        }}
-      >
-        PLAYING
-      </span>
+      <div className="flex items-center gap-2">
+        <span
+          className="w-fit rounded-sm border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em]"
+          style={{
+            fontFamily: "var(--font-headline)",
+            borderColor: hasTrack ? "var(--color-primary)" : "var(--color-outline-variant)",
+            color: hasTrack ? "var(--color-primary)" : "var(--color-outline)",
+            boxShadow: hasTrack ? "0 0 12px var(--color-crt-glow-soft)" : "none",
+            opacity: hasTrack ? 1 : 0.45,
+          }}
+        >
+          PLAYING
+        </span>
+        <SpectrumBars active={playing} muted={!hasTrack} />
+      </div>
     </div>
   );
 }

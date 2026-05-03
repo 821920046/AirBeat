@@ -31,7 +31,7 @@ export function Player() {
         backgroundColor: "color-mix(in srgb, var(--color-surface-container-low) 88%, transparent)",
       }}
     >
-      <TrackInfo track={state.current} />
+      <TrackInfo track={state.current} playing={state.playing} />
       <div className="flex flex-wrap items-center justify-between gap-4">
         <ControlBar
           playing={state.playing}

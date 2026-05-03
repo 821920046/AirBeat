@@ -5,3 +5,4 @@ export { Icon } from "./Icon";
 export { Label } from "./Label";
 export { ProgressBar } from "./ProgressBar";
 export { Slider } from "./Slider";
+export { SpectrumBars } from "./SpectrumBars";
