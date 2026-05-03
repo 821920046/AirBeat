@@ -312,20 +312,22 @@ function ToolMessage({ message: m }: Props) {
           {open ? "\u25BE" : "\u25B8"}
         </span>
         <div className="min-w-0 flex-1">
-          <span
-            className="text-[10px] font-semibold uppercase tracking-[0.12em]"
-            style={{ fontFamily: "var(--font-headline)", color: "var(--color-secondary)" }}
-          >
-            [{toolLabel}]
-          </span>
-          {!open && rest && (
+          <div className="flex items-baseline min-w-0">
             <span
-              className="ml-1.5 truncate text-[11px]"
-              style={{ fontFamily: "var(--font-body)", color: "var(--color-outline)" }}
+              className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.12em]"
+              style={{ fontFamily: "var(--font-headline)", color: "var(--color-secondary)" }}
             >
-              {rest.slice(0, 80)}
+              [{toolLabel}]
             </span>
-          )}
+            {!open && rest && (
+              <span
+                className="ml-1.5 truncate text-[11px]"
+                style={{ fontFamily: "var(--font-body)", color: "var(--color-outline)" }}
+              >
+                {rest.slice(0, 80)}
+              </span>
+            )}
+          </div>
           {open && rest && (
             <pre
               className="mt-1 whitespace-pre-wrap break-words text-[11px] leading-relaxed"

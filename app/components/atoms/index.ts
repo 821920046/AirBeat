@@ -1,6 +1,8 @@
 export { Badge } from "./Badge";
 export { BlockCursor } from "./BlockCursor";
 export { GlowDot } from "./GlowDot";
+export { Logo } from "./Logo";
+export { ModeSwitch } from "./ModeSwitch";
 export { Icon } from "./Icon";
 export { Label } from "./Label";
 export { ProgressBar } from "./ProgressBar";

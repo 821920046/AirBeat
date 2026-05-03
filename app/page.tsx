@@ -1,4 +1,4 @@
-import { ModeSwitch } from "@/app/components/atoms/ModeSwitch";
+import { Logo, ModeSwitch } from "@/app/components/atoms";
 import {
   AgentChat,
   ClockPanel,
@@ -18,18 +18,13 @@ export default function Home() {
         }}
       >
         <header
-          className="flex shrink-0 flex-wrap items-center justify-between gap-4 border-b px-4 py-3 md:px-8"
+          className="flex shrink-0 flex-wrap items-center justify-between gap-4 border-b px-4 py-3 md:px-6"
           style={{
             borderColor: "var(--color-outline-variant)",
             backgroundColor: "color-mix(in srgb, var(--color-surface-container-low) 94%, transparent)",
           }}
         >
-          <span
-            className="text-base font-bold uppercase tracking-[0.18em] md:text-lg"
-            style={{ fontFamily: "var(--font-headline)", color: "var(--color-primary)" }}
-          >
-            AURA_PLAYER
-          </span>
+          <Logo />
           <nav aria-label="Main" className="flex flex-wrap items-center gap-4 md:gap-6">
             <ModeSwitch />
           </nav>
