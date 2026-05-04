@@ -7,6 +7,7 @@ export interface Track {
   subDir: string;
   size: number;
   url: string;
+  bvid?: string;
 }
 
 export interface ChatMessage {

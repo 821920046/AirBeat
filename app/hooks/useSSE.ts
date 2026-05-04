@@ -59,7 +59,7 @@ export function useSSE(options: {
   }, []);
 
   const send = useCallback(
-    async (message: string) => {
+    async (message: string, extra?: Record<string, unknown>) => {
       cancel();
       const ac = new AbortController();
       abortRef.current = ac;
@@ -71,7 +71,7 @@ export function useSSE(options: {
             "Content-Type": "application/json",
             Accept: "text/event-stream",
           },
-          body: JSON.stringify({ ...bodyRef.current, message }),
+          body: JSON.stringify({ ...bodyRef.current, ...extra, message }),
           signal: ac.signal,
         });
 

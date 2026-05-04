@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { Track } from "@/app/lib/types";
-import { SpectrumBars } from "@/app/components/atoms/SpectrumBars";
+import { DanmakuToggle, SpectrumBars } from "@/app/components/atoms";
 
 const MARQUEE_KF =
   "@keyframes pcb-mq{0%{transform:translateX(0)}100%{transform:translateX(calc(var(--mq-offset)*-1))}}";
@@ -102,6 +102,7 @@ export function TrackInfo({ track, playing }: Props) {
           PLAYING
         </span>
         <SpectrumBars active={playing} muted={!hasTrack} />
+        <DanmakuToggle />
       </div>
     </div>
   );

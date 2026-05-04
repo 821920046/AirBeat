@@ -1,4 +1,4 @@
-import { Logo, ModeSwitch } from "@/app/components/atoms";
+import { DanmakuOverlay, Logo, ModeSwitch } from "@/app/components/atoms";
 import {
   AgentChat,
   ClockPanel,
@@ -31,7 +31,8 @@ export default function Home() {
         </header>
 
         <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden p-4 md:grid md:grid-cols-2 md:grid-rows-[1fr] md:gap-6 md:p-6">
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-hidden">
+          <div className="relative flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-hidden">
+            <DanmakuOverlay />
             <ClockPanel />
             <Player />
             <Playlist />

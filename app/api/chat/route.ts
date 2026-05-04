@@ -87,39 +87,64 @@ const CLOUD_PROMPT = `${BASE_PROMPT}
    mkdir -p ~/Documents/bili/$(date +%Y%m%d)
    ls ~/Documents/bili/$(date +%Y%m%d)/ > /tmp/bili_before.txt 2>/dev/null || touch /tmp/bili_before.txt
 
-2. 执行转换（支持多个 URL 批量转换）：
+2. **记录 BV 映射**：从用户指令中提取每个 BV 号和对应的视频标题（参考上文搜索结果中的 bvid 和 title），写入 /tmp/bili_bv_map.txt（每行格式：bvid|标题）
+
+3. 执行转换（支持多个 URL 批量转换）：
    cd ~/Documents/bili/$(date +%Y%m%d) && npx bv2mp3 --url=URL1 --url=URL2
 
-3. 通过 scan API 获取目录下所有文件的正确 track 数据（URL 已正确编码）：
+4. 通过 scan API 获取目录下所有文件的正确 track 数据（URL 已正确编码）：
    TODAY=$(date +%Y%m%d)
    curl -s -G 'http://localhost:3000/api/tracks/scan' -d "subDir=$TODAY"
    返回 JSON: { "tracks": [{ "id", "title", "author", "url", ... }] }
 
-4. 对比转换前后的文件列表，从 scan API 返回的 tracks 中筛选出新增的文件：
+5. 对比转换前后的文件列表，从 scan API 返回的 tracks 中筛选出新增的文件：
    diff <(cat /tmp/bili_before.txt) <(ls ~/Documents/bili/$TODAY/) | grep "^>" | sed "s/^> //"
    根据 diff 输出的新增文件名，在 scan API 返回的 tracks 中找到对应条目
 
-5. 将新增的 tracks 数据直接用 added 代码块输出（前端会自动添加到播放列表）：
+6. **为每个 track 补上 bvid**：读取 /tmp/bili_bv_map.txt，根据 track 的 title 匹配 BV 映射表（模糊匹配即可），在 JSON 对象中添加 "bvid" 字段。**严禁遗漏 bvid 字段**
+
+7. 将新增的 tracks 数据直接用 added 代码块输出（前端会自动添加到播放列表）：
 
 \`\`\`added
 [
-  {"id":"20250430/文件名.mp3","title":"标题","author":"作者","url":"/api/tracks/20250430/%E6%96%87%E4%BB%B6%E5%90%8D.mp3","date":"","filename":"文件名.mp3","subDir":"20250430","size":12345}
+  {"id":"20250430/文件名.mp3","title":"标题","author":"作者","url":"/api/tracks/20250430/%E6%96%87%E4%BB%B6%E5%90%8D.mp3","date":"","filename":"文件名.mp3","subDir":"20250430","size":12345,"bvid":"BV1xxxxxx"}
 ]
 \`\`\`
 
 added 代码块规则：
 - 直接复制 scan API 返回的 track 对象，不要自行编造或修改 url 字段
+- 每个 track 对象**必须**包含 "bvid" 字段，值从 BV 映射表中匹配
 - 即使只有一个文件也用数组格式
 - **严禁**手动拼接 url，必须使用 scan API 返回的 url`;
 
 export async function POST(req: NextRequest) {
-  const { message, mode } = await req.json();
+  const { message, mode, history } = await req.json();
 
   if (!message?.trim()) {
     return Response.json({ error: "message is required" }, { status: 400 });
   }
 
   const systemPrompt = mode === "cloud" ? CLOUD_PROMPT : LOCAL_PROMPT;
+
+  let historyContext = "";
+  if (Array.isArray(history) && history.length > 0) {
+    const lines = history
+      .filter(
+        (m: { role: string; content: string }) =>
+          m.role === "agent" || m.role === "operator"
+      )
+      .slice(-16)
+      .map(
+        (m: { role: string; content: string }) =>
+          `${m.role === "operator" ? "用户" : "助手"}: ${m.content}`
+      );
+    historyContext =
+      `\n\n## 对话历史（最近${lines.length}条）\n` +
+      lines.join("\n") +
+      "\n---\n";
+  }
+
+  const fullPrompt = historyContext + message;
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream({

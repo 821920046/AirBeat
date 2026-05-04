@@ -6,6 +6,7 @@ import type { Track } from "@/app/lib/types";
 import type { ChatMessage as ChatMessageModel } from "@/app/lib/types";
 import { usePlayer } from "@/app/context/PlayerContext";
 import { useAgent } from "@/app/context/AgentContext";
+import { useDanmaku } from "@/app/context/DanmakuContext";
 
 type Props = { message: ChatMessageModel };
 
@@ -170,6 +171,7 @@ const BTN_CONFIG: Record<ButtonState, { label: string; disabled: boolean }> = {
 function TrackCards({ tracks }: { tracks: TrackExt[] }) {
   const { state, addTracks } = usePlayer();
   const { queueConvert, convertQueue, convertingSet, convertedSet } = useAgent();
+  const { fetchDanmaku } = useDanmaku();
   const inPlaylist = new Set(state.playlist.map((t) => t.id));
 
   const isCloud = tracks.some((t) => t.bvid);
@@ -182,6 +184,7 @@ function TrackCards({ tracks }: { tracks: TrackExt[] }) {
   const handleAdd = (track: TrackExt) => {
     if (track.bvid) {
       queueConvert([track.bvid]);
+      fetchDanmaku(track.bvid);
     } else {
       addTracks([track]);
     }
@@ -192,7 +195,10 @@ function TrackCards({ tracks }: { tracks: TrackExt[] }) {
       const bvids = tracks
         .filter((t) => t.bvid && getButtonState(t, inPlaylist, convertQueue, convertingSet, convertedSet) === "add")
         .map((t) => t.bvid!);
-      if (bvids.length) queueConvert(bvids);
+      if (bvids.length) {
+        queueConvert(bvids);
+        bvids.forEach((bv) => fetchDanmaku(bv));
+      }
     } else {
       addTracks(tracks);
     }
@@ -237,11 +243,21 @@ function TrackCards({ tracks }: { tracks: TrackExt[] }) {
               style={{ borderColor: "var(--color-outline-variant)" }}
             >
               <div className="min-w-0 flex-1">
-                <p
-                  className="m-0 truncate text-sm"
-                  style={{ fontFamily: "var(--font-body)", color: "var(--color-on-surface)" }}
-                >
-                  {t.title}
+                <p className="m-0 truncate text-sm" style={{ fontFamily: "var(--font-body)" }}>
+                  {t.bvid ? (
+                    <a
+                      href={`https://www.bilibili.com/video/${t.bvid}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="transition-colors hover:underline"
+                      style={{ color: "var(--color-primary)" }}
+                      title={t.title}
+                    >
+                      {t.title}
+                    </a>
+                  ) : (
+                    <span style={{ color: "var(--color-on-surface)" }}>{t.title}</span>
+                  )}
                 </p>
                 <p className="m-0 truncate text-xs opacity-60" style={{ fontFamily: "var(--font-body)" }}>
                   {t.author}

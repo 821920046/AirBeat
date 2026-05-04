@@ -140,6 +140,8 @@ export function AgentProvider({
   const [convertingSet, setConvertingSet] = useState<Set<string>>(new Set());
   const [convertedSet, setConvertedSet] = useState<Set<string>>(new Set());
 
+  const historyRef = useRef<Array<{ role: string; content: string }>>([]);
+
   const { send, loading } = useSSE({
     url: chatApiPath,
     body: { mode },
@@ -181,7 +183,7 @@ export function AgentProvider({
       .map((bv) => `https://www.bilibili.com/video/${bv}`)
       .join("\n");
     const msg = `请将以下B站视频转为音频并加入播放列表:\n${urls}`;
-    send(msg);
+    send(msg, { history: historyRef.current });
   }, [send]);
 
   const queueConvert = useCallback(
@@ -227,16 +229,23 @@ export function AgentProvider({
       const trimmed = text.trim();
       if (!trimmed) return;
       const ts = Date.now();
-      setMessages((m) => [
-        ...m,
-        {
-          id: newId(),
-          role: "operator",
-          content: trimmed,
-          timestamp: ts,
-        },
-      ]);
-      await send(trimmed);
+      setMessages((m) => {
+        const next = [
+          ...m,
+          {
+            id: newId(),
+            role: "operator" as const,
+            content: trimmed,
+            timestamp: ts,
+          },
+        ];
+        historyRef.current = next
+          .filter((msg) => msg.role === "agent" || msg.role === "operator")
+          .slice(-30)
+          .map((msg) => ({ role: msg.role, content: msg.content }));
+        return next;
+      });
+      await send(trimmed, { history: historyRef.current });
     },
     [send]
   );

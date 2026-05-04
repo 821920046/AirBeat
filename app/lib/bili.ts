@@ -105,30 +105,91 @@ function stripHtml(s: string): string {
   return s.replace(/<[^>]*>/g, "");
 }
 
-export async function searchVideos(
-  keyword: string,
-  page = 1
-): Promise<{ total: number; videos: BiliVideo[] }> {
+export interface DanmakuItem {
+  time: number;
+  content: string;
+  type: number;
+  color: string;
+}
+
+export async function getVideoInfo(bvid: string): Promise<{ cid: string; title: string }> {
   const { imgKey, subKey } = await getWbiKeys();
   const mixinKey = getMixinKey(imgKey, subKey);
   const buvid3 = await ensureBuvid3();
 
-  const params = signParams(
-    {
-      search_type: "video",
-      keyword,
-      page,
-      order: "totalrank",
-    },
-    mixinKey
-  );
-
+  const params = signParams({ bvid }, mixinKey);
   const qs = Object.entries(params)
     .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
     .join("&");
 
   const res = await fetch(
-    `https://api.bilibili.com/x/web-interface/wbi/search/type?${qs}`,
+    `https://api.bilibili.com/x/web-interface/view?${qs}`,
+    {
+      headers: {
+        "User-Agent": UA,
+        Referer: "https://www.bilibili.com",
+        Cookie: `buvid3=${buvid3}`,
+      },
+    }
+  );
+
+  const json = (await res.json()) as {
+    code?: number;
+    data?: { cid?: number; title?: string };
+  };
+
+  if (json.code !== 0 || !json.data?.cid) {
+    throw new Error(`Failed to get video info for ${bvid}`);
+  }
+
+  return { cid: String(json.data.cid), title: json.data.title ?? "" };
+}
+
+export async function getDanmaku(cid: string): Promise<DanmakuItem[]> {
+  const buvid3 = await ensureBuvid3();
+
+  const res = await fetch(
+    `https://api.bilibili.com/x/v1/dm/list.so?oid=${cid}`,
+    {
+      headers: {
+        "User-Agent": UA,
+        Referer: "https://www.bilibili.com",
+        Cookie: `buvid3=${buvid3}`,
+      },
+    }
+  );
+
+  const xml = await res.text();
+
+  const items: DanmakuItem[] = [];
+  const dRegex = /<d p="([^"]*)"[^>]*>([^<]*)<\/d>/g;
+  let match: RegExpExecArray | null;
+  while ((match = dRegex.exec(xml)) !== null) {
+    const attrs = match[1]!.split(",");
+    const time = parseFloat(attrs[0] ?? "0");
+    const type = parseInt(attrs[1] ?? "0", 10);
+    const color = attrs[3] ? `#${parseInt(attrs[3]).toString(16).padStart(6, "0")}` : "#ffffff";
+    const content = match[2]!;
+    if (content.trim()) {
+      items.push({ time, content, type, color });
+    }
+  }
+
+  items.sort((a, b) => a.time - b.time);
+
+  return items;
+}
+
+export async function searchVideos(
+  keyword: string,
+  page = 1
+): Promise<{ total: number; videos: BiliVideo[] }> {
+  const buvid3 = await ensureBuvid3();
+
+  const qs = `search_type=video&keyword=${encodeURIComponent(keyword)}&page=${page}&order=totalrank`;
+
+  const res = await fetch(
+    `https://api.bilibili.com/x/web-interface/search/type?${qs}`,
     {
       headers: {
         "User-Agent": UA,

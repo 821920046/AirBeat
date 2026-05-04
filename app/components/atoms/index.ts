@@ -1,5 +1,7 @@
 export { Badge } from "./Badge";
 export { BlockCursor } from "./BlockCursor";
+export { DanmakuOverlay } from "./DanmakuOverlay";
+export { DanmakuToggle } from "./DanmakuToggle";
 export { GlowDot } from "./GlowDot";
 export { Logo } from "./Logo";
 export { ModeSwitch } from "./ModeSwitch";
