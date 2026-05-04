@@ -24,9 +24,15 @@ const LOCAL_PROMPT = `${BASE_PROMPT}
 - 曲库中部分曲目 author 字段为空，歌手名可能只出现在 title 或 filename 中，这很正常
 - 只要搜索返回了结果（total > 0），就说明命中了，应将这些结果推荐给用户
 - 可多次调用，使用不同关键词缩小范围
-- 搜索不到时（total === 0）如实告知用户
-- 用户说"推荐几首歌"等模糊请求时，可使用空关键词 q= 获取全部曲库，再从中挑选
 - 搜索返回结果后直接推荐，不需要额外检查 API 是否正常
+- 用户说"推荐几首歌"等模糊请求时，可使用空关键词 q= 获取全部曲库，再从中挑选
+
+### 简繁体中文搜索策略（重要）
+- 曲库文件名可能混合使用简体和繁体中文，搜索 API 只做精确字符匹配
+- **先判断关键词是否包含简繁不同的字符**：如果关键词本身简繁体写法完全相同（如"大地恩情"、"雨天"、"花"），只需搜索一次
+- **只有简繁体写法不同时**（如"张学友"vs"張學友"、"听海"vs"聽海"），才发起简体和繁体两次搜索
+- 将搜索结果合并去重后推荐给用户
+- 如果两次搜索 total 都为 0，才告知用户未找到
 
 ## 推荐输出格式（严格遵守）
 
@@ -145,6 +151,7 @@ export async function POST(req: NextRequest) {
   }
 
   const fullPrompt = historyContext + message;
+  console.log('>> fullPrompt', fullPrompt)
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
@@ -159,7 +166,7 @@ export async function POST(req: NextRequest) {
         send("status", { stage: "starting" });
 
         for await (const msg of query({
-          prompt: message,
+          prompt: fullPrompt,
           options: {
             systemPrompt,
             allowedTools: ["Read", "Bash", "Glob", "Grep"],

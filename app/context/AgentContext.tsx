@@ -183,7 +183,7 @@ export function AgentProvider({
       .map((bv) => `https://www.bilibili.com/video/${bv}`)
       .join("\n");
     const msg = `请将以下B站视频转为音频并加入播放列表:\n${urls}`;
-    send(msg, { history: historyRef.current });
+    send(msg);
   }, [send]);
 
   const queueConvert = useCallback(
