@@ -1,5 +1,5 @@
 {
-  "name": "aura-player",
+  "name": "aura-music",
   "version": "0.1.0",
   "description": "AI Agent-powered Bilibili audio player. Listen to music anytime, anywhere.",
   "private": true,

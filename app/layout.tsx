@@ -28,7 +28,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "AuraPlayer",
+  title: "AuraMusic",
   description: "Listen to music anytime, anywhere.",
 };
 

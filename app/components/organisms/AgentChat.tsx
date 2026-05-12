@@ -45,11 +45,15 @@ const ThinkingCard = (
 );
 
 export function AgentChat() {
-  const { messages, loading, sessionId, sendMessage } = useAgent();
+  const { messages, loading, sessionId, sendMessage, cancel } = useAgent();
+  const listRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    const el = listRef.current;
+    if (el) {
+      el.scrollTop = el.scrollHeight;
+    }
   }, [messages, loading]);
 
   const showThinking = loading && (messages.length === 0 || messages[messages.length - 1].role !== "agent");
@@ -109,7 +113,7 @@ export function AgentChat() {
         </div>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 py-3 md:px-3 md:py-4">
+      <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto px-2 py-3 md:px-3 md:py-4">
         {messages.length === 0 && !loading ? (
           <p className="px-2 text-center text-sm opacity-55" style={{ fontFamily: "var(--font-body)" }}>
             Awaiting operator input…
@@ -121,7 +125,38 @@ export function AgentChat() {
       </div>
 
       <div className="shrink-0 border-t px-3 py-3 md:px-4" style={{ borderColor: "var(--color-outline-variant)" }}>
-        <CommandInput disabled={loading} onSubmit={(t) => void sendMessage(t)} />
+        <div className="flex items-center gap-2">
+          <div className="min-w-0 flex-1">
+            <CommandInput disabled={loading} onSubmit={(t) => void sendMessage(t)} />
+          </div>
+          {loading && (
+            <button
+              type="button"
+              aria-label="中断"
+              onClick={cancel}
+              className="group relative inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-sm border bg-transparent transition-colors outline-none focus-visible:ring-1 hover:border-[color:var(--color-error)] hover:text-[color:var(--color-error)]"
+              style={{
+                borderColor: "var(--color-outline-variant)",
+                color: "var(--color-outline)",
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                <rect x="6" y="6" width="12" height="12" rx="1" stroke="none" />
+              </svg>
+              <span
+                className="pointer-events-none absolute -bottom-8 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded px-2 py-1 text-[10px] uppercase tracking-[0.12em] opacity-0 transition-opacity group-hover:opacity-100"
+                style={{
+                  fontFamily: "var(--font-headline)",
+                  backgroundColor: "var(--color-surface-container-high)",
+                  color: "var(--color-error)",
+                  border: "1px solid var(--color-outline-variant)",
+                }}
+              >
+                STOP
+              </span>
+            </button>
+          )}
+        </div>
       </div>
     </section>
   );

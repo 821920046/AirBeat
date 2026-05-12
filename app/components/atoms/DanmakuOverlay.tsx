@@ -5,7 +5,7 @@ import { useDanmaku } from "@/app/context/DanmakuContext";
 import { usePlayer } from "@/app/context/PlayerContext";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-const SCROLL_DURATION = 10;
+const SCROLL_DURATION = 12;
 const LOOKAHEAD = 0.3;
 
 type ActiveDanmaku = DanmakuItem & { spawnId: number };

@@ -17,6 +17,7 @@ import {
 type AgentCtxValue = AgentState & {
   sendMessage: (text: string) => Promise<void>;
   queueConvert: (bvids: string[]) => void;
+  cancel: () => void;
   convertQueue: string[];
   convertingSet: Set<string>;
   convertedSet: Set<string>;
@@ -142,7 +143,7 @@ export function AgentProvider({
 
   const historyRef = useRef<Array<{ role: string; content: string }>>([]);
 
-  const { send, loading } = useSSE({
+  const { send, loading, cancel: sseCancel } = useSSE({
     url: chatApiPath,
     body: { mode },
     onMessage: (msg) => {
@@ -202,6 +203,12 @@ export function AgentProvider({
     [convertingSet, convertedSet, flush]
   );
 
+  const cancel = useCallback(() => {
+    sseCancel();
+    setConvertQueue([]);
+    setConvertingSet(new Set());
+  }, [sseCancel]);
+
   const prevLoadingRef = useRef(loading);
   useEffect(() => {
     const wasLoading = prevLoadingRef.current;
@@ -257,11 +264,12 @@ export function AgentProvider({
       sessionId,
       sendMessage,
       queueConvert,
+      cancel,
       convertQueue,
       convertingSet,
       convertedSet,
     }),
-    [messages, loading, sessionId, sendMessage, queueConvert, convertQueue, convertingSet, convertedSet]
+    [messages, loading, sessionId, sendMessage, queueConvert, cancel, convertQueue, convertingSet, convertedSet]
   );
 
   return (

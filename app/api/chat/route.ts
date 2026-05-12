@@ -4,7 +4,7 @@ import { NextRequest } from "next/server";
 export const maxDuration = 300;
 export const dynamic = "force-dynamic";
 
-const BASE_PROMPT = `你是 AuraPlayer 的 AI 音频助手。保持简洁的中文终端风格语气。
+const BASE_PROMPT = `你是 AuraMusic 的 AI 音频助手。保持简洁的中文终端风格语气。
 
 ## 重要限制
 - 你只能使用 Bash 工具。禁止使用 WebSearch、WebFetch 或任何网络搜索工具
