@@ -52,7 +52,7 @@ function useDurationMap(tracks: Track[]) {
 }
 
 export function Playlist() {
-  const { state, playTrack } = usePlayer();
+  const { state, playTrack, removeTrack } = usePlayer();
   const [filter, setFilter] = useState("");
 
   const allTracks = state.playlist;
@@ -172,7 +172,7 @@ export function Playlist() {
                       e.preventDefault();
                       onRowClick(t);
                     }}
-                    className="cursor-pointer transition-colors hover:bg-[color-mix(in_srgb,var(--color-surface-container-high)_55%,transparent)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[color:var(--color-primary)] focus-visible:ring-inset focus-visible:bg-[color-mix(in_srgb,var(--color-surface-container-high)_55%,transparent)]"
+                    className="group relative cursor-pointer transition-colors hover:bg-[color-mix(in_srgb,var(--color-surface-container-high)_55%,transparent)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[color:var(--color-primary)] focus-visible:ring-inset focus-visible:bg-[color-mix(in_srgb,var(--color-surface-container-high)_55%,transparent)]"
                     style={{
                       borderLeftWidth: "3px",
                       borderLeftStyle: "solid",
@@ -185,6 +185,39 @@ export function Playlist() {
                     <td className="max-w-0 truncate px-2 py-2.5">{t.title}</td>
                     <td className="w-20 shrink-0 px-2 py-2.5 text-right tabular-nums opacity-82">
                       {active && state.duration > 0 ? fmtSec(state.duration) : fmtSec(durMap[t.id])}
+                    </td>
+                    <td className="absolute right-0 top-0 bottom-0 flex items-center justify-center px-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                      style={{ backgroundColor: "color-mix(in srgb, var(--color-surface-container) 92%, transparent)" }}
+                    >
+                      <button
+                        type="button"
+                        aria-label="移除"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeTrack(t.id);
+                        }}
+                        className="group/rm relative flex h-6 w-6 items-center justify-center rounded-sm border bg-transparent transition-colors hover:border-[color:var(--color-error)] hover:text-[color:var(--color-error)]"
+                        style={{
+                          borderColor: "var(--color-outline-variant)",
+                          color: "var(--color-outline)",
+                        }}
+                      >
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                          <line x1="18" y1="6" x2="6" y2="18" />
+                          <line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
+                        <span
+                          className="pointer-events-none absolute -top-8 right-0 z-10 whitespace-nowrap rounded px-2 py-1 text-[10px] uppercase tracking-[0.12em] opacity-0 transition-opacity group-hover/rm:opacity-100"
+                          style={{
+                            fontFamily: "var(--font-headline)",
+                            backgroundColor: "var(--color-surface-container-high)",
+                            color: "var(--color-error)",
+                            border: "1px solid var(--color-outline-variant)",
+                          }}
+                        >
+                          REMOVE
+                        </span>
+                      </button>
                     </td>
                   </tr>
                 );

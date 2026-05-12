@@ -17,6 +17,7 @@ type PlayerCtx = {
   state: PlayerState;
   playTrack: (track: Track, playlist?: Track[]) => void;
   addTracks: (tracks: Track[]) => void;
+  removeTrack: (trackId: string) => void;
   next: () => void;
   prev: () => void;
   togglePlay: () => void | Promise<void>;
@@ -94,6 +95,44 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       }
     }
   }, [playTrack]);
+
+  const removeTrack = useCallback(
+    (trackId: string) => {
+      setPlaylist((prev) => {
+        const rmIdx = prev.findIndex((t) => t.id === trackId);
+        if (rmIdx < 0) return prev;
+        const next = [...prev];
+        next.splice(rmIdx, 1);
+        playlistRef.current = next;
+
+        const curIdx = indexRef.current;
+
+        if (rmIdx === curIdx) {
+          // removing the currently playing track
+          if (next.length === 0) {
+            setIndex(-1);
+            indexRef.current = -1;
+            pause();
+          } else {
+            const newIdx = Math.min(rmIdx, next.length - 1);
+            setIndex(newIdx);
+            indexRef.current = newIdx;
+            const t = next[newIdx];
+            if (t) playTrack(t);
+          }
+        } else if (rmIdx < curIdx) {
+          // removed a track before current — shift index back
+          const newIdx = curIdx - 1;
+          setIndex(newIdx);
+          indexRef.current = newIdx;
+        }
+        // rmIdx > curIdx: index unchanged
+
+        return next;
+      });
+    },
+    [playTrack, pause]
+  );
 
   const playTrackWrapped = useCallback(
     (track: Track, pl?: Track[]) => {
@@ -184,6 +223,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       state,
       playTrack: playTrackWrapped,
       addTracks,
+      removeTrack,
       next,
       prev,
       togglePlay: togglePlayWrapped,
@@ -192,7 +232,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       stop,
       audioRef,
     }),
-    [state, playTrackWrapped, addTracks, next, prev, togglePlayWrapped, seek, setVolume, stop, audioRef]
+    [state, playTrackWrapped, addTracks, removeTrack, next, prev, togglePlayWrapped, seek, setVolume, stop, audioRef]
   );
 
   return (

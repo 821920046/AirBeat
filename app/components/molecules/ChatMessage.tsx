@@ -25,7 +25,8 @@ function looksLikeTracks(arr: unknown[]): arr is Track[] {
 
 function tryParseTrackArray(raw: string): Track[] | null {
   try {
-    const parsed = JSON.parse(raw);
+    const trimmed = raw.trim();
+    const parsed = JSON.parse(trimmed);
     if (Array.isArray(parsed) && looksLikeTracks(parsed)) return parsed;
     if (parsed?.tracks && Array.isArray(parsed.tracks) && looksLikeTracks(parsed.tracks))
       return parsed.tracks;
@@ -41,39 +42,39 @@ function detectTag(matchStr: string): "tracks" | "added" {
 function parseContent(content: string): ContentPart[] {
   const parts: ContentPart[] = [];
   let last = 0;
-  let matched = false;
 
   FENCED_RE.lastIndex = 0;
   let match: RegExpExecArray | null;
   while ((match = FENCED_RE.exec(content)) !== null) {
     const tracks = tryParseTrackArray(match[1]);
-    if (!tracks) continue;
-    matched = true;
     if (match.index > last) {
       parts.push({ type: "text", text: content.slice(last, match.index) });
     }
-    const tag = detectTag(match[0]);
-    parts.push({ type: tag, tracks });
+    if (tracks) {
+      const tag = detectTag(match[0]);
+      parts.push({ type: tag, tracks });
+    } else {
+      // fenced block found but JSON parsing failed — render the captured content as text
+      parts.push({ type: "text", text: match[1] });
+    }
     last = match.index + match[0].length;
   }
 
-  if (!matched) {
-    const bare = content.match(/(\[[\s\n]*\{[\s\S]*?\}[\s\n]*\])/);
+  if (last < content.length) {
+    const remainder = content.slice(last);
+    const bare = remainder.match(/(\[[\s\n]*\{[\s\S]*?\}[\s\n]*\])/);
     if (bare) {
       const tracks = tryParseTrackArray(bare[1]);
       if (tracks) {
-        const idx = content.indexOf(bare[1]);
-        if (idx > 0) parts.push({ type: "text", text: content.slice(0, idx) });
+        const idx = remainder.indexOf(bare[1]);
+        if (idx > 0) parts.push({ type: "text", text: remainder.slice(0, idx) });
         parts.push({ type: "tracks", tracks });
         const end = idx + bare[1].length;
-        if (end < content.length) parts.push({ type: "text", text: content.slice(end) });
+        if (end < remainder.length) parts.push({ type: "text", text: remainder.slice(end) });
         return parts;
       }
     }
-  }
-
-  if (last < content.length) {
-    parts.push({ type: "text", text: content.slice(last) });
+    parts.push({ type: "text", text: remainder });
   }
   return parts;
 }
