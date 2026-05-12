@@ -31,7 +31,42 @@ function tryParseTrackArray(raw: string): Track[] | null {
     if (parsed?.tracks && Array.isArray(parsed.tracks) && looksLikeTracks(parsed.tracks))
       return parsed.tracks;
   } catch { /* not valid JSON */ }
-  return null;
+  return tryExtractTracksFromRaw(raw);
+}
+
+const OBJ_RE = /\{([^}]*)\}/g;
+
+function tryExtractTracksFromRaw(raw: string): Track[] | null {
+  const tracks: Track[] = [];
+  OBJ_RE.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = OBJ_RE.exec(raw)) !== null) {
+    const obj = m[1];
+    const bvid = obj.match(/"bvid"\s*:\s*"([^"]+)"/)?.[1];
+    const id = obj.match(/"id"\s*:\s*"([^"]+)"/)?.[1];
+    const title = obj.match(/"title"\s*:\s*"([\s\S]+?)"\s*,\s*"(?:author|duration|url|bvid|id)"/)?.[1];
+    const author = obj.match(/"author"\s*:\s*"([\s\S]+?)"\s*,\s*"(?:duration|url|bvid)"/)?.[1];
+    const duration = obj.match(/"duration"\s*:\s*"([^"]+)"/)?.[1];
+    const url = obj.match(/"url"\s*:\s*"([^"]+)"/)?.[1];
+
+    const trackId = bvid || id;
+    if (trackId && title) {
+      tracks.push({
+        id: trackId,
+        ...(bvid ? { bvid } : {}),
+        title,
+        author: author ?? "",
+        ...(duration ? { duration } : {}),
+        url: url ?? "",
+        date: "",
+        filename: "",
+        subDir: "",
+        size: 0,
+      } as Track);
+    }
+  }
+  OBJ_RE.lastIndex = 0;
+  return tracks.length > 0 ? tracks : null;
 }
 
 function detectTag(matchStr: string): "tracks" | "added" {
