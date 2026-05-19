@@ -19,6 +19,17 @@ const MIXIN_KEY_ENC_TAB = [
 const UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 
+const COMMON_HEADERS = {
+  "User-Agent": UA,
+  Accept: "application/json, text/plain, */*",
+  "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+  Origin: "https://www.bilibili.com",
+  Referer: "https://www.bilibili.com/",
+  "Sec-Fetch-Dest": "empty",
+  "Sec-Fetch-Mode": "cors",
+  "Sec-Fetch-Site": "same-site",
+};
+
 let cachedKeys: { imgKey: string; subKey: string; ts: number } | null = null;
 let cachedBuvid3: string | null = null;
 
@@ -81,8 +92,7 @@ async function getWbiKeys(): Promise<{ imgKey: string; subKey: string }> {
   const buvid3 = await ensureBuvid3();
   const res = await fetch("https://api.bilibili.com/x/web-interface/nav", {
     headers: {
-      "User-Agent": UA,
-      Referer: "https://www.bilibili.com",
+      ...COMMON_HEADERS,
       Cookie: `buvid3=${buvid3}`,
     },
   });
@@ -126,8 +136,7 @@ export async function getVideoInfo(bvid: string): Promise<{ cid: string; title: 
     `https://api.bilibili.com/x/web-interface/view?${qs}`,
     {
       headers: {
-        "User-Agent": UA,
-        Referer: "https://www.bilibili.com",
+        ...COMMON_HEADERS,
         Cookie: `buvid3=${buvid3}`,
       },
     }
@@ -152,8 +161,7 @@ export async function getDanmaku(cid: string): Promise<DanmakuItem[]> {
     `https://api.bilibili.com/x/v1/dm/list.so?oid=${cid}`,
     {
       headers: {
-        "User-Agent": UA,
-        Referer: "https://www.bilibili.com",
+        ...COMMON_HEADERS,
         Cookie: `buvid3=${buvid3}`,
       },
     }
@@ -184,16 +192,23 @@ export async function searchVideos(
   keyword: string,
   page = 1
 ): Promise<{ total: number; videos: BiliVideo[] }> {
+  const { imgKey, subKey } = await getWbiKeys();
+  const mixinKey = getMixinKey(imgKey, subKey);
   const buvid3 = await ensureBuvid3();
 
-  const qs = `search_type=video&keyword=${encodeURIComponent(keyword)}&page=${page}&order=totalrank`;
+  const params = signParams(
+    { search_type: "video", keyword, page, order: "totalrank" },
+    mixinKey
+  );
+  const qs = Object.entries(params)
+    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+    .join("&");
 
   const res = await fetch(
     `https://api.bilibili.com/x/web-interface/search/type?${qs}`,
     {
       headers: {
-        "User-Agent": UA,
-        Referer: "https://www.bilibili.com",
+        ...COMMON_HEADERS,
         Cookie: `buvid3=${buvid3}`,
       },
     }

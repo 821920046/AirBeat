@@ -98,18 +98,42 @@ const CLOUD_PROMPT = `${BASE_PROMPT}
 3. 执行转换（支持多个 URL 批量转换）：
    cd ~/Documents/bili/$(date +%Y%m%d) && npx bv2mp3 --url=URL1 --url=URL2
 
-4. 通过 scan API 获取目录下所有文件的正确 track 数据（URL 已正确编码）：
+4. **重命名下载的文件**（在 scan 之前执行，便于本地模式搜索）：
+   TODAY=$(date +%Y%m%d)
+
+   a) 找出 bv2mp3 新增的文件：
+      diff <(cat /tmp/bili_before.txt) <(ls ~/Documents/bili/$TODAY/) | grep "^>" | sed "s/^> //"
+
+   b) 读取 /tmp/bili_bv_map.txt（格式：bvid|标题），对每个新增文件匹配对应的 bvid 和标题，重命名。
+      重命名格式：{清理后的完整标题}_BV{bvid}.mp3
+
+      **重要：必须保留搜索结果的完整标题，只做字符替换，严禁截断、提取关键词或自行简化标题！**
+
+      标题清理规则（仅替换非法字符，不删减内容）：
+      - \`-\` 替换为 \`_\`
+      - \`|\` 替换为 \`_\`
+      - 移除 \`【\` \`】\` \`「\` \`」\` 等 bracket 字符
+      - 移除 \`:\` \`/\` \`\\\` \`*\` \`?\` \`"\` \`<\` \`>\` 等非法文件名字符
+      - 多个连续空格合并为一个
+
+      示例：
+      B站标题: "【 等你下课 | 官方MV 】周杰伦 with 杨瑞代"
+      重命名为: "等你下课_官方MV_周杰伦_with_杨瑞代_BV1xxxxx.mp3"
+
+   完成后用 ls ~/Documents/bili/$TODAY/ 确认文件名已更新
+
+5. 通过 scan API 获取目录下所有文件的正确 track 数据（URL 已正确编码）：
    TODAY=$(date +%Y%m%d)
    curl -s -G 'http://localhost:3000/api/tracks/scan' -d "subDir=$TODAY"
    返回 JSON: { "tracks": [{ "id", "title", "author", "url", ... }] }
 
-5. 对比转换前后的文件列表，从 scan API 返回的 tracks 中筛选出新增的文件：
+6. 对比转换前后的文件列表，从 scan API 返回的 tracks 中筛选出新增的文件：
    diff <(cat /tmp/bili_before.txt) <(ls ~/Documents/bili/$TODAY/) | grep "^>" | sed "s/^> //"
    根据 diff 输出的新增文件名，在 scan API 返回的 tracks 中找到对应条目
 
-6. **为每个 track 补上 bvid**：读取 /tmp/bili_bv_map.txt，根据 track 的 title 匹配 BV 映射表（模糊匹配即可），在 JSON 对象中添加 "bvid" 字段。**严禁遗漏 bvid 字段**
+7. **为每个 track 补上 bvid**：读取 /tmp/bili_bv_map.txt，根据 track 的 title 匹配 BV 映射表（模糊匹配即可），在 JSON 对象中添加 "bvid" 字段。**严禁遗漏 bvid 字段**
 
-7. 将新增的 tracks 数据直接用 added 代码块输出（前端会自动添加到播放列表）：
+8. 将新增的 tracks 数据直接用 added 代码块输出（前端会自动添加到播放列表）：
 
 \`\`\`added
 [

@@ -17,7 +17,7 @@ type Props = {
 export function CommandInput({
   onSubmit,
   disabled = false,
-  placeholder = "> ENTER COMMAND …",
+  placeholder = "Hi, 告诉我你想听什么…",
 }: Props) {
   const [value, setValue] = useState("");
   const [cursorLeft, setCursorLeft] = useState(0);
