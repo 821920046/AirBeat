@@ -115,6 +115,14 @@ aura-player/
 | Linux | 完全支持 |
 | Windows | 需要 WSL（云端转换依赖 bash 命令） |
 
+## 赞赏
+
+如果这个项目对你有帮助，欢迎请作者喝杯咖啡 :)
+
+<p align="center">
+  <img src="docs/money_code.jpg" alt="赞赏码" width="300" />
+</p>
+
 ## License
 
 本项目采用 [CC BY-NC-SA 4.0](LICENSE) 协议。
