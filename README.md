@@ -5,7 +5,7 @@
 [![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
 [![Node](https://img.shields.io/badge/Node.js-%3E%3D20-green)](https://nodejs.org/)
 
-AI Agent 驱动的 B站音频播放器。随时随地，想听就听。
+AI Agent 驱动的 B站音频播放器。随时随地，想听就听，不止于音乐。
 
 ![AuraMusic 主界面](docs/screenshots/pic_1.png)
 
