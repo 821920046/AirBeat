@@ -42,7 +42,7 @@ AI 驱动的智能音乐播放器。随时随地，免费听歌。
 ### 安装
 
 ```bash
-git clone https://github.com/pstrm-dev/AirBeat.git
+git clone https://github.com/821920046/AirBeat.git
 cd AirBeat
 
 # 安装前端依赖
@@ -87,19 +87,61 @@ cd .. && NEXT_PUBLIC_API_BASE=http://localhost:8787 pnpm dev
 
 打开 http://localhost:3000 即可使用。
 
-### 部署
+### 部署（Cloudflare 免费方案）
+
+#### 方式一：自动部署（推荐）
+
+Push 到 main 分支后，GitHub Actions 自动部署前端和 Worker。
+
+**首次配置：**
+
+1. **获取 Cloudflare API Token**
+   - 打开 https://dash.cloudflare.com/profile/api-tokens
+   - 点击 **Create Token** → 选择 **Cloudflare Pages - Edit** 模板
+   - 也需勾选 **Account > Workers Scripts > Edit** 权限
+   - 创建后复制 token
+
+2. **获取 Cloudflare Account ID**
+   - 打开 https://dash.cloudflare.com → 右侧栏可见 **Account ID**
+
+3. **在 GitHub 添加 Secrets**
+   - 打开 https://github.com/821920046/AirBeat/settings/secrets/actions
+   - 添加两个 Secret：
+
+   | Secret Name | 值 |
+   |---|---|
+   | `CLOUDFLARE_API_TOKEN` | 上面的 token |
+   | `CLOUDFLARE_ACCOUNT_ID` | 上面的 account ID |
+
+4. **首次手动创建资源**（只需一次）
+   ```bash
+   cd worker
+   npx wrangler pages project create airbeat
+   npx wrangler d1 create airbeat          # 记下 database_id 填入 wrangler.toml
+   npx wrangler r2 bucket create airbeat-audio
+   npx wrangler kv namespace create CACHE  # 记下 id 填入 wrangler.toml
+   npx wrangler d1 execute airbeat --file=../schema.sql --remote
+   npx wrangler secret put OPENROUTER_API_KEY
+   npx wrangler deploy                     # 首次部署 Worker
+   ```
+
+5. **配置 Pages 路由**
+   - Cloudflare Dashboard → Pages → airbeat → Functions → Routes
+   - 添加路由：`/api/*` → 指向 Worker `airbeat-api`
+   - 添加路由：`/audio/*` → 指向 Worker `airbeat-api`
+
+配置完成后，以后每次 `git push` 到 main 就会自动部署。
+
+#### 方式二：手动部署
 
 ```bash
 # 部署 Worker
 cd worker && npx wrangler deploy
 
-# 构建前端
-cd .. && pnpm build
-
-# 部署到 Cloudflare Pages（上传 out/ 目录）
+# 构建并部署前端
+cd .. && npm run build
+npx wrangler pages deploy out --project-name=airbeat
 ```
-
-在 Cloudflare Pages 设置中，将 `/api/*` 和 `/audio/*` 路由指向 Worker。
 
 ## Project Structure
 
