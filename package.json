@@ -1,7 +1,7 @@
 {
-  "name": "aura-music",
+  "name": "airbeat",
   "version": "0.1.0",
-  "description": "AI Agent-powered Bilibili audio player. Listen to music anytime, anywhere.",
+  "description": "AI-powered smart music player. Free music, anytime, anywhere.",
   "license": "CC-BY-NC-SA-4.0",
   "scripts": {
     "dev": "next dev",
@@ -10,7 +10,8 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.2.123",
+    "@ffmpeg/ffmpeg": "^0.12.15",
+    "@ffmpeg/util": "^0.12.2",
     "next": "16.2.4",
     "react": "19.2.4",
     "react-dom": "19.2.4"

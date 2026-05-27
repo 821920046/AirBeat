@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Track } from "@/app/lib/types";
 import type { ChatMessage as ChatMessageModel } from "@/app/lib/types";
 import { usePlayer } from "@/app/context/PlayerContext";
-import { useAgent } from "@/app/context/AgentContext";
+import { useConvert } from "@/app/context/ConvertContext";
 import { useDanmaku } from "@/app/context/DanmakuContext";
 
 type Props = { message: ChatMessageModel };
@@ -179,61 +179,67 @@ function AddedCards({ tracks }: { tracks: TrackExt[] }) {
   );
 }
 
-type ButtonState = "add" | "queued" | "converting" | "added";
+type ButtonState = "add" | "converting" | "added";
 
 function getButtonState(
   track: TrackExt,
   inPlaylist: Set<string>,
-  convertQueue: string[],
-  convertingSet: Set<string>,
-  convertedSet: Set<string>
+  converting: Map<string, unknown>
 ): ButtonState {
   if (inPlaylist.has(track.id) || (track.bvid && inPlaylist.has(track.bvid))) return "added";
-  if (track.bvid) {
-    if (convertedSet.has(track.bvid)) return "added";
-    if (convertingSet.has(track.bvid)) return "converting";
-    if (convertQueue.includes(track.bvid)) return "queued";
-  }
+  if (track.bvid && converting.has(track.bvid)) return "converting";
   return "add";
 }
 
 const BTN_CONFIG: Record<ButtonState, { label: string; disabled: boolean }> = {
   add: { label: "+ ADD", disabled: false },
-  queued: { label: "QUEUED", disabled: true },
   converting: { label: "CONVERTING...", disabled: true },
   added: { label: "ADDED", disabled: true },
 };
 
 function TrackCards({ tracks }: { tracks: TrackExt[] }) {
   const { state, addTracks } = usePlayer();
-  const { queueConvert, convertQueue, convertingSet, convertedSet } = useAgent();
+  const { convertBvid, converting } = useConvert();
   const { fetchDanmaku } = useDanmaku();
   const inPlaylist = new Set(state.playlist.map((t) => t.id));
 
   const isCloud = tracks.some((t) => t.bvid);
 
   const allDone = tracks.every((t) => {
-    const s = getButtonState(t, inPlaylist, convertQueue, convertingSet, convertedSet);
+    const s = getButtonState(t, inPlaylist, converting);
     return s !== "add";
   });
 
-  const handleAdd = (track: TrackExt) => {
+  const handleAdd = async (track: TrackExt) => {
     if (track.bvid) {
-      queueConvert([track.bvid]);
       fetchDanmaku(track.bvid);
+      try {
+        const convertedTrack = await convertBvid(track.bvid, track.title, track.author);
+        addTracks([convertedTrack]);
+      } catch {
+        // error state handled by ConvertContext
+      }
     } else {
       addTracks([track]);
     }
   };
 
-  const handleAddAll = () => {
+  const handleAddAll = async () => {
     if (isCloud) {
       const bvids = tracks
-        .filter((t) => t.bvid && getButtonState(t, inPlaylist, convertQueue, convertingSet, convertedSet) === "add")
+        .filter((t) => t.bvid && getButtonState(t, inPlaylist, converting) === "add")
         .map((t) => t.bvid!);
-      if (bvids.length) {
-        queueConvert(bvids);
-        bvids.forEach((bv) => fetchDanmaku(bv));
+      for (const bv of bvids) {
+        const track = tracks.find((t) => t.bvid === bv);
+        if (track) {
+          fetchDanmaku(bv);
+          try {
+            const convertedTrack = await convertBvid(bv, track.title, track.author);
+            addTracks([convertedTrack]);
+          } catch {
+            // continue with next
+          }
+        }
       }
     } else {
       addTracks(tracks);
@@ -270,8 +276,10 @@ function TrackCards({ tracks }: { tracks: TrackExt[] }) {
       </div>
       <div className="max-h-[16rem] overflow-y-auto scrollbar-thin">
         {tracks.map((t) => {
-          const btnState = getButtonState(t, inPlaylist, convertQueue, convertingSet, convertedSet);
+          const btnState = getButtonState(t, inPlaylist, converting);
           const cfg = BTN_CONFIG[btnState];
+          const progress = t.bvid ? converting.get(t.bvid)?.progress : undefined;
+          const stage = t.bvid ? converting.get(t.bvid)?.stage : undefined;
           return (
             <div
               key={t.bvid || t.id}
@@ -299,6 +307,20 @@ function TrackCards({ tracks }: { tracks: TrackExt[] }) {
                   {t.author}
                   {t.duration && <span className="ml-2 opacity-70">{t.duration}</span>}
                 </p>
+                {btnState === "converting" && (
+                  <div className="mt-1.5">
+                    <div className="flex items-center justify-between text-[10px] opacity-60" style={{ fontFamily: "var(--font-headline)" }}>
+                      <span>{stage === "downloading" ? "DOWNLOADING" : stage === "loading-converter" ? "LOADING CONVERTER" : stage === "converting" ? "CONVERTING" : stage === "uploading" ? "UPLOADING" : "PROCESSING"}</span>
+                      <span>{progress ?? 0}%</span>
+                    </div>
+                    <div className="mt-0.5 h-1 w-full rounded-full" style={{ backgroundColor: "var(--color-surface-container-high)" }}>
+                      <div
+                        className="h-full rounded-full transition-all duration-300"
+                        style={{ width: `${progress ?? 0}%`, backgroundColor: "var(--color-primary)" }}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
               <button
                 onClick={() => handleAdd(t)}

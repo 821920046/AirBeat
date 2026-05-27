@@ -1,13 +1,12 @@
 "use client";
 
 import type { AgentState, ChatMessage } from "@/app/lib/types";
-import { useMode } from "@/app/context/ModeContext";
+import { API_BASE } from "@/app/lib/config";
 import { useSSE } from "@/app/hooks/useSSE";
 import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useMemo,
   useRef,
   useState,
@@ -16,11 +15,7 @@ import {
 
 type AgentCtxValue = AgentState & {
   sendMessage: (text: string) => Promise<void>;
-  queueConvert: (bvids: string[]) => void;
   cancel: () => void;
-  convertQueue: string[];
-  convertingSet: Set<string>;
-  convertedSet: Set<string>;
 };
 
 const AgentContext = createContext<AgentCtxValue | null>(null);
@@ -128,24 +123,19 @@ function appendFromSdkPayload(
 
 export function AgentProvider({
   children,
-  chatApiPath = "/api/chat",
+  chatApiPath = `${API_BASE}/api/chat`,
 }: {
   children: ReactNode;
   chatApiPath?: string;
 }) {
-  const { mode } = useMode();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [sessionId, setSessionId] = useState<string | null>(null);
-
-  const [convertQueue, setConvertQueue] = useState<string[]>([]);
-  const [convertingSet, setConvertingSet] = useState<Set<string>>(new Set());
-  const [convertedSet, setConvertedSet] = useState<Set<string>>(new Set());
 
   const historyRef = useRef<Array<{ role: string; content: string }>>([]);
 
   const { send, loading, cancel: sseCancel } = useSSE({
     url: chatApiPath,
-    body: { mode },
+    body: {},
     onMessage: (msg) => {
       if (msg.event === "output") {
         appendFromSdkPayload(msg.data, setMessages, setSessionId);
@@ -164,72 +154,9 @@ export function AgentProvider({
     },
   });
 
-  const loadingRef = useRef(loading);
-  loadingRef.current = loading;
-  const convertQueueRef = useRef(convertQueue);
-  convertQueueRef.current = convertQueue;
-
-  const flush = useCallback(() => {
-    const queue = convertQueueRef.current;
-    if (!queue.length) return;
-
-    setConvertQueue([]);
-    setConvertingSet((prev) => {
-      const next = new Set(prev);
-      for (const bv of queue) next.add(bv);
-      return next;
-    });
-
-    const urls = queue
-      .map((bv) => `https://www.bilibili.com/video/${bv}`)
-      .join("\n");
-    const msg = `请将以下B站视频转为音频并加入播放列表:\n${urls}`;
-    send(msg);
-  }, [send]);
-
-  const queueConvert = useCallback(
-    (bvids: string[]) => {
-      setConvertQueue((prev) => {
-        const existing = new Set([...prev, ...Array.from(convertingSet), ...Array.from(convertedSet)]);
-        const fresh = bvids.filter((bv) => !existing.has(bv));
-        if (!fresh.length) return prev;
-        return [...prev, ...fresh];
-      });
-
-      if (!loadingRef.current) {
-        setTimeout(() => flush(), 0);
-      }
-    },
-    [convertingSet, convertedSet, flush]
-  );
-
   const cancel = useCallback(() => {
     sseCancel();
-    setConvertQueue([]);
-    setConvertingSet(new Set());
   }, [sseCancel]);
-
-  const prevLoadingRef = useRef(loading);
-  useEffect(() => {
-    const wasLoading = prevLoadingRef.current;
-    prevLoadingRef.current = loading;
-
-    if (wasLoading && !loading) {
-      setConvertingSet((prev) => {
-        if (prev.size > 0) {
-          setConvertedSet((done) => {
-            const next = new Set(done);
-            for (const bv of prev) next.add(bv);
-            return next;
-          });
-        }
-        return new Set();
-      });
-      if (convertQueueRef.current.length > 0) {
-        setTimeout(() => flush(), 50);
-      }
-    }
-  }, [loading, flush]);
 
   const sendMessage = useCallback(
     async (text: string) => {
@@ -263,13 +190,9 @@ export function AgentProvider({
       loading,
       sessionId,
       sendMessage,
-      queueConvert,
       cancel,
-      convertQueue,
-      convertingSet,
-      convertedSet,
     }),
-    [messages, loading, sessionId, sendMessage, queueConvert, cancel, convertQueue, convertingSet, convertedSet]
+    [messages, loading, sessionId, sendMessage, cancel]
   );
 
   return (

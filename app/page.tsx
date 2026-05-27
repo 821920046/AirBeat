@@ -1,4 +1,4 @@
-import { DanmakuOverlay, Logo, ModeSwitch } from "@/app/components/atoms";
+import { DanmakuOverlay, Logo } from "@/app/components/atoms";
 import {
   AgentChat,
   ClockPanel,
@@ -26,7 +26,6 @@ export default function Home() {
         >
           <Logo />
           <nav aria-label="Main" className="flex flex-wrap items-center gap-4 md:gap-6">
-            <ModeSwitch />
           </nav>
         </header>
 

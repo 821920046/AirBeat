@@ -33,3 +33,10 @@ export interface AgentState {
   loading: boolean;
   sessionId: string | null;
 }
+
+export interface DanmakuItem {
+  time: number;
+  content: string;
+  type: number;
+  color: string;
+}

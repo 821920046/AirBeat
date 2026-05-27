@@ -28,8 +28,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "AuraMusic",
-  description: "Listen to music anytime, anywhere.",
+  title: "AirBeat",
+  description: "AI-powered smart music player. Free music, anytime, anywhere.",
 };
 
 export default function RootLayout({

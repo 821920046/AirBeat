@@ -1,33 +1,34 @@
 <p align="center">
-  <img src="public/aura_logo_1.png" alt="Aura Music" width="200" />
+  <img src="public/aura_logo_1.png" alt="AirBeat" width="200" />
 </p>
 
 [![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
-[![Node](https://img.shields.io/badge/Node.js-%3E%3D20-green)](https://nodejs.org/)
 
-AI Agent 驱动的 B站音频播放器。随时随地，想听就听，不止于音乐。
+AI 驱动的智能音乐播放器。随时随地，免费听歌。
 
-![AuraMusic 主界面](docs/screenshots/pic_1.png)
+![AirBeat 主界面](docs/screenshots/pic_1.png)
 
-![AuraMusic 云端搜索](docs/screenshots/pic_2.png)
+![AirBeat 云端搜索](docs/screenshots/pic_2.png)
 
 ## Features
 
-- **双模式切换** — 本地曲库搜索 / B站云端搜索，一键切换
 - **AI 对话交互** — 通过自然语言告诉 AI 你想听什么，智能搜索推荐
-- **B站视频转音频** — 云端搜索后自动转换为本地 MP3，构建个人曲库
+- **B站海量曲库** — 搜索 B站任意视频，一键转为音频
+- **浏览器端转换** — 基于 ffmpeg.wasm，无需服务器，浏览器内完成 AAC→MP3 转换
 - **弹幕叠加** — 播放 B站来源的音频时，同步显示原视频弹幕
 - **复古终端 UI** — 赛博朋克风格界面，实时状态面板
-- **智能文件名解析** — 自动从文件名中提取标题、作者、日期、BV号
+- **全平台免费部署** — 基于 Cloudflare 免费服务，零成本运行
 
 ## Tech Stack
 
 | 层 | 技术 |
 |---|------|
-| 框架 | Next.js 16 (App Router) |
-| 前端 | React 19 / TypeScript 5 |
+| 前端 | Next.js 16 (Static Export) / React 19 / TypeScript 5 |
 | 样式 | Tailwind CSS 4 + CSS Variables |
-| AI | @anthropic-ai/claude-agent-sdk（支持 DeepSeek / Claude） |
+| 后端 | Cloudflare Workers |
+| 存储 | Cloudflare R2 (音频) + D1 (元数据) + KV (缓存) |
+| AI | OpenRouter 免费模型 (function calling) |
+| 转换 | ffmpeg.wasm (浏览器端 AAC→MP3) |
 
 ## Getting Started
 
@@ -35,77 +36,104 @@ AI Agent 驱动的 B站音频播放器。随时随地，想听就听，不止于
 
 - Node.js >= 20
 - pnpm（推荐）或 npm
-- AI API Key（推荐 [DeepSeek](https://platform.deepseek.com/api_keys)，也支持 Anthropic Claude）
+- Cloudflare 账号（免费）
+- OpenRouter API Key（免费注册：https://openrouter.ai）
 
 ### 安装
 
 ```bash
-git clone https://github.com/pstrm-dev/aura-player.git
-cd aura-player
+git clone https://github.com/pstrm-dev/AirBeat.git
+cd AirBeat
+
+# 安装前端依赖
 pnpm install
+
+# 安装 Worker 依赖
+cd worker && pnpm install
 ```
 
-### 配置环境变量
+### 创建 Cloudflare 资源
 
 ```bash
-cp .env.example .env.local
+cd worker
+
+# 创建 D1 数据库
+npx wrangler d1 create airbeat
+# 记下输出的 database_id，填入 wrangler.toml
+
+# 创建 R2 存储桶
+npx wrangler r2 bucket create airbeat-audio
+
+# 创建 KV 命名空间
+npx wrangler kv namespace create CACHE
+# 记下输出的 id，填入 wrangler.toml
+
+# 初始化数据库
+npx wrangler d1 execute airbeat --file=../schema.sql --remote
+
+# 设置 OpenRouter API Key
+npx wrangler secret put OPENROUTER_API_KEY
 ```
 
-编辑 `.env.local`，填入你的 API Key：
-
-```env
-# 推荐使用 DeepSeek（中文能力强、免费额度大）
-# 获取 Key: https://platform.deepseek.com/api_keys
-ANTHROPIC_BASE_URL=https://api.deepseek.com
-ANTHROPIC_API_KEY=your-deepseek-api-key
-
-# 音频存储目录（可选，默认 ~/Documents/bili）
-# MUSIC_DIR=/path/to/your/music
-```
-
-### 启动
+### 本地开发
 
 ```bash
-pnpm dev
+# 终端 1：启动 Worker
+cd worker && npx wrangler dev
+
+# 终端 2：启动前端
+cd .. && NEXT_PUBLIC_API_BASE=http://localhost:8787 pnpm dev
 ```
 
 打开 http://localhost:3000 即可使用。
 
+### 部署
+
+```bash
+# 部署 Worker
+cd worker && npx wrangler deploy
+
+# 构建前端
+cd .. && pnpm build
+
+# 部署到 Cloudflare Pages（上传 out/ 目录）
+```
+
+在 Cloudflare Pages 设置中，将 `/api/*` 和 `/audio/*` 路由指向 Worker。
+
 ## Project Structure
 
 ```
-aura-player/
-├── app/
-│   ├── api/              # API 路由
-│   │   ├── chat/         # AI Agent SSE 接口
-│   │   ├── bili/         # B站搜索 & 弹幕代理
-│   │   ├── search/       # 本地曲库搜索
-│   │   └── tracks/       # 音频文件服务 & 扫描
-│   ├── components/       # UI 组件（Atomic Design）
+AirBeat/
+├── app/                     # Next.js 前端（静态导出）
+│   ├── components/          # UI 组件（Atomic Design）
 │   │   ├── atoms/
 │   │   ├── molecules/
 │   │   └── organisms/
-│   ├── context/          # React Context（Player/Agent/Mode/Danmaku）
-│   ├── hooks/            # 自定义 Hooks
-│   └── lib/              # 共享逻辑（bili API、tracks 解析、类型）
-├── docs/screenshots/     # 应用截图
-├── public/               # 静态资源
-└── design/               # 设计规范文档
+│   ├── context/             # React Context
+│   │   ├── PlayerContext    # 音频播放状态
+│   │   ├── AgentContext     # AI 对话状态
+│   │   ├── ConvertContext   # ffmpeg.wasm 转换状态
+│   │   └── DanmakuContext   # 弹幕状态
+│   ├── hooks/               # 自定义 Hooks
+│   └── lib/                 # 类型定义 & 配置
+├── worker/                  # Cloudflare Worker
+│   ├── src/
+│   │   ├── handlers/        # API 路由处理
+│   │   └── lib/             # B站API / OpenRouter / D1 / CORS
+│   ├── schema.sql           # D1 建表语句
+│   └── wrangler.toml        # Worker 配置
+├── docs/screenshots/        # 应用截图
+├── public/                  # 静态资源
+└── design/                  # 设计规范文档
 ```
 
 ## Usage
 
-### 本地模式
-
-搜索 `MUSIC_DIR` 目录下的 MP3 文件。支持按标题、作者、文件名模糊匹配。
-
-### 云端模式
-
-1. 切换到 CLOUD 模式
-2. 告诉 AI 你想听什么（如"听周杰伦的演唱会"）
-3. AI 在 B站搜索相关视频并推荐
-4. 点击 ADD 转换为音频，自动加入播放列表
-5. 转换后的音频保存在本地，下次可在本地模式直接搜索
+1. 在聊天框输入你想听的内容（如"听周杰伦的晴天"）
+2. AI 在 B站搜索并推荐相关结果
+3. 点击 + ADD 按钮，浏览器自动下载、转换、上传音频
+4. 转换完成后自动加入播放列表，即刻播放
 
 ## Platform
 
@@ -113,7 +141,7 @@ aura-player/
 |------|---------|
 | macOS | 完全支持 |
 | Linux | 完全支持 |
-| Windows | 需要 WSL（云端转换依赖 bash 命令） |
+| Windows | 完全支持（浏览器端转换，无 WSL 依赖） |
 
 ## 赞赏
 

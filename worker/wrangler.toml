@@ -1,0 +1,21 @@
+name = "airbeat-api"
+main = "src/index.ts"
+compatibility_date = "2024-12-01"
+
+# 本地开发用 miniflare，部署前需要替换为真实 ID
+[[d1_databases]]
+binding = "DB"
+database_name = "airbeat"
+database_id = "placeholder-d1-id"
+
+[[r2_buckets]]
+binding = "AUDIO_BUCKET"
+bucket_name = "airbeat-audio"
+
+[[kv_namespaces]]
+binding = "CACHE"
+id = "placeholder-kv-id"
+
+[vars]
+OPENROUTER_API_KEY = ""
+OPENROUTER_MODEL = "qwen/qwen-2.5-72b-instruct:free"

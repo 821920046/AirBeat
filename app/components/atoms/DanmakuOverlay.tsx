@@ -1,6 +1,6 @@
 "use client";
 
-import type { DanmakuItem } from "@/app/lib/bili";
+import type { DanmakuItem } from "@/app/lib/types";
 import { useDanmaku } from "@/app/context/DanmakuContext";
 import { usePlayer } from "@/app/context/PlayerContext";
 import { useCallback, useEffect, useRef, useState } from "react";
