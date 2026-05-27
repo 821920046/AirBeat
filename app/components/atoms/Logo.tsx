@@ -4,7 +4,7 @@ export function Logo({ className }: { className?: string }) {
   return (
     <div className={["flex items-center gap-3", className].filter(Boolean).join(" ")}>
       <Image
-        src="/aura_logo_1.png"
+        src="/airbeat_logo.png"
         alt="AirBeat"
         width={138}
         height={41}
