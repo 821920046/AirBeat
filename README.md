@@ -185,14 +185,6 @@ AirBeat/
 | Linux | 完全支持 |
 | Windows | 完全支持（浏览器端转换，无 WSL 依赖） |
 
-## 赞赏
-
-如果这个项目对你有帮助，欢迎请作者喝杯咖啡 :)
-
-<p align="center">
-  <img src="docs/money_code.jpg" alt="赞赏码" width="300" />
-</p>
-
 ## License
 
 本项目采用 [CC BY-NC-SA 4.0](LICENSE) 协议。
