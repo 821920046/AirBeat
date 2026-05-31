@@ -1,25 +1,22 @@
-import { searchTracks } from "../../_lib/db";
-import { jsonResponse, errorResponse, handleOptions } from "../../_lib/cors";
-import type { Env } from "../../_lib/types";
+interface Env { DB: D1Database; AUDIO_BUCKET: R2Bucket; CACHE: KVNamespace; OPENROUTER_API_KEY: string; OPENROUTER_MODEL: string; }
+interface Track { id: string; title: string; author: string; date: string; filename: string; subDir: string; size: number; url: string; bvid?: string; }
+interface DBTrackRow { id: number; title: string; author: string; bvid: string | null; r2_key: string; duration: number | null; file_size: number | null; date_added: string; source: string; }
 
-export const onRequestOptions = ({ request }: { request: Request }) => handleOptions(request);
+function rowToTrack(row: DBTrackRow): Track { return { id: String(row.id), title: row.title, author: row.author || "", date: row.date_added || "", filename: row.r2_key.split("/").pop() || "", subDir: "", size: row.file_size || 0, url: `/audio/${row.r2_key}`, bvid: row.bvid || undefined }; }
 
-export const onRequestGet = async ({
-  request,
-  env,
-}: {
-  request: Request;
-  env: Env;
-}) => {
-  const url = new URL(request.url);
-  const q = url.searchParams.get("q") || "";
-  const limit = parseInt(url.searchParams.get("limit") || "20", 10);
+async function searchTracks(env: Env, query: string, limit = 20): Promise<{ total: number; tracks: Track[] }> {
+  if (!query.trim()) { const rows = await env.DB.prepare("SELECT * FROM tracks ORDER BY date_added DESC LIMIT ?").bind(limit).all<DBTrackRow>(); return { total: rows.results.length, tracks: rows.results.map(rowToTrack) }; }
+  const like = `%${query}%`;
+  const countRow = await env.DB.prepare("SELECT COUNT(*) as cnt FROM tracks WHERE title LIKE ? OR author LIKE ?").bind(like, like).first<{ cnt: number }>();
+  const rows = await env.DB.prepare("SELECT * FROM tracks WHERE title LIKE ? OR author LIKE ? ORDER BY date_added DESC LIMIT ?").bind(like, like, limit).all<DBTrackRow>();
+  return { total: countRow?.cnt || 0, tracks: rows.results.map(rowToTrack) };
+}
 
-  try {
-    const result = await searchTracks(env, q, Math.min(limit, 100));
-    return jsonResponse(result);
-  } catch (err) {
-    console.error("tracks error:", err);
-    return errorResponse(String(err), 500);
-  }
+function jr(d: unknown, s = 200): Response { return new Response(JSON.stringify(d), { s, headers: { "Content-Type": "application/json" } } as ResponseInit); }
+function er(m: string, s = 500): Response { return jr({ error: m }, s); }
+
+export const onRequestGet = async ({ request, env }: { request: Request; env: Env }) => {
+  const url = new URL(request.url); const q = url.searchParams.get("q") || ""; const limit = parseInt(url.searchParams.get("limit") || "20", 10);
+  try { return jr(await searchTracks(env, q, Math.min(limit, 100))); }
+  catch (err) { console.error("tracks error:", err); return er(String(err), 500); }
 };
