@@ -25,7 +25,7 @@ AI 驱动的智能音乐播放器。随时随地，免费听歌。
 |---|------|
 | 前端 | Next.js 16 (Static Export) / React 19 / TypeScript 5 |
 | 样式 | Tailwind CSS 4 + CSS Variables |
-| 后端 | Cloudflare Workers |
+| 后端 | Cloudflare Pages Functions |
 | 存储 | Cloudflare R2 (音频) + D1 (元数据) + KV (缓存) |
 | AI | OpenRouter 免费模型 (function calling) |
 | 转换 | ffmpeg.wasm (浏览器端 AAC→MP3) |
@@ -35,7 +35,7 @@ AI 驱动的智能音乐播放器。随时随地，免费听歌。
 ### 前置条件
 
 - Node.js >= 20
-- pnpm（推荐）或 npm
+- npm
 - Cloudflare 账号（免费）
 - OpenRouter API Key（免费注册：https://openrouter.ai）
 
@@ -44,61 +44,56 @@ AI 驱动的智能音乐播放器。随时随地，免费听歌。
 ```bash
 git clone https://github.com/821920046/AirBeat.git
 cd AirBeat
-
-# 安装前端依赖
-pnpm install
-
-# 安装 Worker 依赖
-cd worker && pnpm install
+npm install
 ```
 
 ### 创建 Cloudflare 资源
 
 ```bash
-cd worker
-
 # 创建 D1 数据库
 npx wrangler d1 create airbeat
-# 记下输出的 database_id，填入 wrangler.toml
+# 记下输出的 database_id，填入根目录 wrangler.toml
 
 # 创建 R2 存储桶
 npx wrangler r2 bucket create airbeat-audio
 
 # 创建 KV 命名空间
 npx wrangler kv namespace create CACHE
-# 记下输出的 id，填入 wrangler.toml
+# 记下输出的 id，填入根目录 wrangler.toml
 
-# 初始化数据库
-npx wrangler d1 execute airbeat --file=../schema.sql --remote
+# 初始化数据库表结构
+npx wrangler d1 execute airbeat --file=worker/schema.sql --remote
 
-# 设置 OpenRouter API Key
-npx wrangler secret put OPENROUTER_API_KEY
+# 设置 OpenRouter API Key（Pages 项目 secret）
+npx wrangler pages secret put OPENROUTER_API_KEY --project-name=airbeat
 ```
 
 ### 本地开发
 
 ```bash
-# 终端 1：启动 Worker
-cd worker && npx wrangler dev
-
-# 终端 2：启动前端
-cd .. && NEXT_PUBLIC_API_BASE=http://localhost:8787 pnpm dev
+npm run dev
 ```
 
 打开 http://localhost:3000 即可使用。
 
-### 部署（Cloudflare 免费方案）
+> 本地开发时 API 请求需要 Worker 支持，可通过 `npx wrangler dev` 在另一个终端启动 Worker：
+> ```bash
+> cd worker && npx wrangler dev
+> ```
+> 然后设置环境变量 `NEXT_PUBLIC_API_BASE=http://localhost:8787`。
 
-#### 方式一：自动部署（推荐）
+### 部署
 
-Push 到 main 分支后，GitHub Actions 自动部署前端和 Worker。
+#### 自动部署（推荐）
 
-**首次配置：**
+Push 到 `main` 分支后，GitHub Actions 自动构建并部署到 Cloudflare Pages。
+
+**首次配置步骤：**
 
 1. **获取 Cloudflare API Token**
    - 打开 https://dash.cloudflare.com/profile/api-tokens
-   - 点击 **Create Token** → 选择 **Cloudflare Pages - Edit** 模板
-   - 也需勾选 **Account > Workers Scripts > Edit** 权限
+   - 点击 **Create Token**，选择 **Cloudflare Pages - Edit** 模板
+   - 额外勾选以下权限：Workers KV Storage (Edit)、D1 (Edit)、R2 Storage (Edit)、Workers Scripts (Edit)
    - 创建后复制 token
 
 2. **获取 Cloudflare Account ID**
@@ -106,41 +101,25 @@ Push 到 main 分支后，GitHub Actions 自动部署前端和 Worker。
 
 3. **在 GitHub 添加 Secrets**
    - 打开 https://github.com/821920046/AirBeat/settings/secrets/actions
-   - 添加两个 Secret：
+   - 添加：
 
    | Secret Name | 值 |
    |---|---|
    | `CLOUDFLARE_API_TOKEN` | 上面的 token |
    | `CLOUDFLARE_ACCOUNT_ID` | 上面的 account ID |
 
-4. **首次手动创建资源**（只需一次）
-   ```bash
-   cd worker
-   npx wrangler pages project create airbeat
-   npx wrangler d1 create airbeat          # 记下 database_id 填入 wrangler.toml
-   npx wrangler r2 bucket create airbeat-audio
-   npx wrangler kv namespace create CACHE  # 记下 id 填入 wrangler.toml
-   npx wrangler d1 execute airbeat --file=../schema.sql --remote
-   npx wrangler secret put OPENROUTER_API_KEY
-   npx wrangler deploy                     # 首次部署 Worker
-   ```
+4. **创建 Cloudflare 资源**（只需一次，命令见上方「创建 Cloudflare 资源」）
 
-5. **配置 Pages 路由**
-   - Cloudflare Dashboard → Pages → airbeat → Functions → Routes
-   - 添加路由：`/api/*` → 指向 Worker `airbeat-api`
-   - 添加路由：`/audio/*` → 指向 Worker `airbeat-api`
+配置完成后，每次 `git push` 到 main 即自动部署前端 + API。
 
-配置完成后，以后每次 `git push` 到 main 就会自动部署。
-
-#### 方式二：手动部署
+#### 手动部署
 
 ```bash
-# 部署 Worker
-cd worker && npx wrangler deploy
+# 构建前端
+npm run build
 
-# 构建并部署前端
-cd .. && npm run build
-npx wrangler pages deploy out --project-name=airbeat
+# 部署到 Cloudflare Pages（包含 Functions）
+npx wrangler pages deploy
 ```
 
 ## Project Structure
@@ -159,16 +138,43 @@ AirBeat/
 │   │   └── DanmakuContext   # 弹幕状态
 │   ├── hooks/               # 自定义 Hooks
 │   └── lib/                 # 类型定义 & 配置
-├── worker/                  # Cloudflare Worker
+├── functions/               # Cloudflare Pages Functions（API 后端）
+│   ├── _middleware.ts        # 全局 CORS 中间件
+│   ├── api/
+│   │   ├── bili/            # B站相关 API
+│   │   │   ├── search.ts    # GET /api/bili/search
+│   │   │   ├── danmaku.ts   # GET /api/bili/danmaku
+│   │   │   ├── audio-url.ts # GET /api/bili/audio-url
+│   │   │   └── proxy.ts     # GET /api/bili/proxy
+│   │   ├── chat.ts          # POST /api/chat（AI 对话 SSE）
+│   │   ├── tracks.ts        # GET /api/tracks
+│   │   └── upload.ts        # POST /api/upload
+│   └── audio/
+│       └── [[path]].ts      # GET /audio/*（R2 音频流）
+├── worker/                  # Worker 源码（本地开发用）
 │   ├── src/
-│   │   ├── handlers/        # API 路由处理
-│   │   └── lib/             # B站API / OpenRouter / D1 / CORS
 │   ├── schema.sql           # D1 建表语句
-│   └── wrangler.toml        # Worker 配置
+│   └── wrangler.toml
+├── wrangler.toml            # Pages 项目配置（D1/KV/R2 绑定）
 ├── docs/screenshots/        # 应用截图
 ├── public/                  # 静态资源
 └── design/                  # 设计规范文档
 ```
+
+## Architecture
+
+```
+浏览器 ──→ Cloudflare Pages
+            ├── 静态文件（Next.js 导出的 HTML/CSS/JS）
+            └── Functions（API 后端）
+                 ├── /api/bili/*  → 调用 B站 API（WBI 签名）
+                 ├── /api/chat   → OpenRouter AI 对话（SSE）
+                 ├── /api/tracks → D1 数据库查询
+                 ├── /api/upload → R2 音频上传 + D1 写入
+                 └── /audio/*    → R2 音频流式播放
+```
+
+前端和 API 部署在同一个 Cloudflare Pages 项目，共享同一域名，无需跨域配置。
 
 ## Usage
 
