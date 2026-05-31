@@ -6,34 +6,38 @@ function pad(n: number) {
   return n.toString().padStart(2, "0");
 }
 
-export function useClock() {
-  const tick = () => {
-    const d = new Date();
-    const h = d.getHours();
-    const m = d.getMinutes();
-    const s = d.getSeconds();
+// 服务端和客户端初始值保持一致，避免 hydration mismatch
+const INITIAL_STATE = { time: "00:00", seconds: "00", day: "---", date: "---" };
 
-    const time = `${pad(h)}:${pad(m)}`;
-    const seconds = pad(s);
+function tick() {
+  const d = new Date();
+  const h = d.getHours();
+  const m = d.getMinutes();
+  const s = d.getSeconds();
 
-    const dayFmt = new Intl.DateTimeFormat("en-US", { weekday: "long" });
-    const dateFmt = new Intl.DateTimeFormat("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
+  const time = `${pad(h)}:${pad(m)}`;
+  const seconds = pad(s);
 
-    return {
-      time,
-      seconds,
-      day: dayFmt.format(d),
-      date: dateFmt.format(d),
-    };
+  const dayFmt = new Intl.DateTimeFormat("en-US", { weekday: "long" });
+  const dateFmt = new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+
+  return {
+    time,
+    seconds,
+    day: dayFmt.format(d),
+    date: dateFmt.format(d),
   };
+}
 
-  const [state, setState] = useState(tick);
+export function useClock() {
+  const [state, setState] = useState(INITIAL_STATE);
 
   useEffect(() => {
+    setState(tick());
     const id = setInterval(() => setState(tick()), 1000);
     return () => clearInterval(id);
   }, []);
