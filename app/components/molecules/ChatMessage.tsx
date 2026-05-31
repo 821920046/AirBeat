@@ -118,14 +118,29 @@ type TrackExt = Track & { bvid?: string; duration?: string };
 
 function AddedCards({ tracks }: { tracks: TrackExt[] }) {
   const { addTracks } = usePlayer();
+  const { convertBvid, converting } = useConvert();
+  const { fetchDanmaku } = useDanmaku();
   const didAutoAdd = useRef(false);
 
+  // 有 bvid 的曲目走转换流程，无 bvid 的直接加入播放列表
   useEffect(() => {
-    if (!didAutoAdd.current && tracks.length > 0) {
-      didAutoAdd.current = true;
-      addTracks(tracks);
+    if (didAutoAdd.current || tracks.length === 0) return;
+    didAutoAdd.current = true;
+
+    const cloudTracks = tracks.filter((t) => t.bvid);
+    const localTracks = tracks.filter((t) => !t.bvid);
+
+    if (localTracks.length > 0) addTracks(localTracks);
+
+    for (const track of cloudTracks) {
+      if (track.bvid) {
+        fetchDanmaku(track.bvid);
+        convertBvid(track.bvid, track.title, track.author)
+          .then((converted) => addTracks([converted]))
+          .catch(() => {});
+      }
     }
-  }, [tracks, addTracks]);
+  }, [tracks, addTracks, convertBvid, fetchDanmaku]);
 
   return (
     <div
