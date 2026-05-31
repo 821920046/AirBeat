@@ -141,6 +141,29 @@ export function AgentProvider({
         appendFromSdkPayload(msg.data, setMessages, setSessionId);
         return;
       }
+      // 搜索结果：直接用真实数据渲染曲目卡片（带真实 bvid）
+      if (msg.event === "search_results") {
+        const data = msg.data as { videos?: Array<{ bvid: string; title: string; author: string; duration: string; pic?: string }> };
+        if (data.videos?.length) {
+          const tracks = data.videos.map((v) => ({
+            id: v.bvid,
+            bvid: v.bvid,
+            title: v.title,
+            author: v.author,
+            duration: v.duration,
+            url: "",
+            date: "",
+            filename: "",
+            subDir: "",
+            size: 0,
+          }));
+          setMessages((m) => [
+            ...m,
+            { id: newId(), role: "agent" as const, content: "```tracks\n" + JSON.stringify(tracks) + "\n```", timestamp: Date.now() },
+          ]);
+        }
+        return;
+      }
       if (msg.event === "error") {
         const err =
           typeof msg.data === "string"
