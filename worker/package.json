@@ -11,7 +11,7 @@
     "r2:create": "wrangler r2 bucket create airbeat-audio"
   },
   "dependencies": {
-    "@noble/hashes": "^1.7.1"
+    "ts-md5": "^2.0.1"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20241218.0",

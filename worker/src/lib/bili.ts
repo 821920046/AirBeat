@@ -1,5 +1,4 @@
-import { md5 } from "@noble/hashes/md5";
-import { bytesToHex } from "@noble/hashes/utils";
+import { Md5 } from "ts-md5";
 import type { BiliVideo, DanmakuItem, Env } from "../types";
 
 const MIXIN_KEY_ENC_TAB = [
@@ -44,8 +43,8 @@ function signParams(
     .map((k) => `${encodeURIComponent(k)}=${encodeURIComponent(signed[k])}`)
     .join("&");
 
-  // @noble/hashes 替代 Node.js crypto.createHash("md5")
-  const wRid = bytesToHex(md5(new TextEncoder().encode(sorted + mixinKey)));
+  // ts-md5 生成 B站 wbi 签名
+  const wRid = Md5.hashStr(sorted + mixinKey) as string;
 
   signed.w_rid = wRid;
   return signed;
