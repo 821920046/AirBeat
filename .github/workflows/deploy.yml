@@ -5,8 +5,7 @@ on:
     branches: [main]
 
 jobs:
-  # 部署前端到 Cloudflare Pages
-  deploy-frontend:
+  deploy-pages:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -26,26 +25,4 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy out --project-name=airbeat
-
-  # 部署 Worker
-  deploy-worker:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Install Worker dependencies
-        run: npm ci
-        working-directory: worker
-
-      - name: Deploy Worker
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: worker
-          command: deploy
+          command: pages deploy
