@@ -16,4 +16,4 @@ binding = "CACHE"
 id = "9b1cfe3ed757459ebb57ef7b8155c057"
 
 [vars]
-OPENROUTER_MODEL = "qwen/qwen3-coder:free"
+OPENROUTER_MODEL = "google/gemma-4-26b-a4b-it:free"

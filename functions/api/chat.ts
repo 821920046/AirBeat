@@ -36,27 +36,41 @@ async function getKeyPool(env: Env): Promise<string[]> {
 
 function shuffle<T>(arr: T[]): T[] { const a = [...arr]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
 
-async function chatCompletion(env: Env, messages: ChatMsg[], tools?: unknown[]): Promise<OpenRouterResponse> {
-  const model = env.OPENROUTER_MODEL || "qwen/qwen3-coder:free";
-  const body: Record<string, unknown> = { model, messages, temperature: 0.7, max_tokens: 2048 };
-  if (tools && tools.length > 0) { body.tools = tools; body.tool_choice = "auto"; }
-  const bodyStr = JSON.stringify(body);
+// 免费模型降级列表（按优先级排列，429 时自动切换下一个）
+const MODEL_FALLBACKS = [
+  "google/gemma-4-26b-a4b-it:free",
+  "qwen/qwen3-coder:free",
+  "deepseek/deepseek-v4-flash:free",
+  "meta-llama/llama-3.3-70b-instruct:free",
+  "moonshotai/kimi-k2.6:free",
+  "openai/gpt-oss-20b:free",
+];
 
+async function chatCompletion(env: Env, messages: ChatMsg[], tools?: unknown[]): Promise<OpenRouterResponse> {
+  const primaryModel = env.OPENROUTER_MODEL || "google/gemma-4-26b-a4b-it:free";
+  // 主模型排在第一位，后面跟降级列表（去重）
+  const models = [primaryModel, ...MODEL_FALLBACKS.filter(m => m !== primaryModel)];
   const pool = shuffle(await getKeyPool(env));
   if (pool.length === 0) throw new Error("No API keys configured");
 
-  let lastError = "";
-  for (const key of pool) {
-    const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}`, "HTTP-Referer": "https://airbeat-8mo.pages.dev", "X-Title": "AirBeat" },
-      body: bodyStr,
-    });
-    if (resp.status === 429) { lastError = "RATE_LIMITED"; continue; }
-    if (!resp.ok) throw new Error(`OpenRouter error ${resp.status}: ${await resp.text()}`);
-    return resp.json() as Promise<OpenRouterResponse>;
+  for (const model of models) {
+    const body: Record<string, unknown> = { model, messages, temperature: 0.7, max_tokens: 2048 };
+    if (tools && tools.length > 0) { body.tools = tools; body.tool_choice = "auto"; }
+    const bodyStr = JSON.stringify(body);
+
+    for (const key of pool) {
+      const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}`, "HTTP-Referer": "https://airbeat-8mo.pages.dev", "X-Title": "AirBeat" },
+        body: bodyStr,
+      });
+      if (resp.status === 429) continue; // 换下一个 key
+      if (!resp.ok) { const t = await resp.text(); console.error(`Model ${model} error ${resp.status}: ${t}`); break; } // 这个模型有其他错误，换下一个模型
+      return resp.json() as Promise<OpenRouterResponse>;
+    }
+    console.log(`Model ${model} exhausted all keys, trying next model...`);
   }
-  throw new Error(`All ${pool.length} keys rate limited. ${lastError}`);
+  throw new Error("All models and keys rate limited");
 }
 
 // --- SSE & 工具执行 ---
