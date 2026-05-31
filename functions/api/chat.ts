@@ -48,29 +48,33 @@ const MODEL_FALLBACKS = [
 
 async function chatCompletion(env: Env, messages: ChatMsg[], tools?: unknown[]): Promise<OpenRouterResponse> {
   const primaryModel = env.OPENROUTER_MODEL || "google/gemma-4-26b-a4b-it:free";
-  // 主模型排在第一位，后面跟降级列表（去重）
   const models = [primaryModel, ...MODEL_FALLBACKS.filter(m => m !== primaryModel)];
   const pool = shuffle(await getKeyPool(env));
   if (pool.length === 0) throw new Error("No API keys configured");
+
+  // 每个模型最多试 2 个 key，控制子请求数（6模型×2key=12，不超50上限）
+  const keysPerModel = Math.min(2, pool.length);
 
   for (const model of models) {
     const body: Record<string, unknown> = { model, messages, temperature: 0.7, max_tokens: 2048 };
     if (tools && tools.length > 0) { body.tools = tools; body.tool_choice = "auto"; }
     const bodyStr = JSON.stringify(body);
 
-    for (const key of pool) {
+    let modelRateLimited = false;
+    for (let i = 0; i < keysPerModel; i++) {
+      const key = pool[i % pool.length];
       const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}`, "HTTP-Referer": "https://airbeat-8mo.pages.dev", "X-Title": "AirBeat" },
         body: bodyStr,
       });
-      if (resp.status === 429) continue; // 换下一个 key
-      if (!resp.ok) { const t = await resp.text(); console.error(`Model ${model} error ${resp.status}: ${t}`); break; } // 这个模型有其他错误，换下一个模型
+      if (resp.status === 429) { modelRateLimited = true; break; } // 模型被限流，直接换下一个模型
+      if (!resp.ok) { const t = await resp.text(); console.error(`Model ${model} error ${resp.status}: ${t}`); break; }
       return resp.json() as Promise<OpenRouterResponse>;
     }
-    console.log(`Model ${model} exhausted all keys, trying next model...`);
+    if (modelRateLimited) console.log(`Model ${model} rate limited, trying next...`);
   }
-  throw new Error("All models and keys rate limited");
+  throw new Error("All models rate limited");
 }
 
 // --- SSE & 工具执行 ---
