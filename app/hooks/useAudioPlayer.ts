@@ -101,8 +101,8 @@ export function useAudioPlayer(options?: { onEnded?: () => void }) {
     el.load();
     setProgress(0);
     setDuration(0);
-    void el.play().catch(() => {
-      /* ignore */
+    void el.play().catch((err) => {
+      console.error("Audio play failed:", err, "src:", track.url);
     });
   }, []);
 
