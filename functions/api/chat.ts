@@ -29,7 +29,7 @@ async function searchTracks(env: Env, query: string, limit = 20): Promise<{ tota
 
 // --- OpenRouter ---
 async function chatCompletion(env: Env, messages: ChatMsg[], tools?: unknown[]): Promise<OpenRouterResponse> {
-  const model = env.OPENROUTER_MODEL || "qwen/qwen-2.5-72b-instruct:free";
+  const model = env.OPENROUTER_MODEL || "qwen/qwen3-coder:free";
   const body: Record<string, unknown> = { model, messages, temperature: 0.7, max_tokens: 2048 };
   if (tools && tools.length > 0) { body.tools = tools; body.tool_choice = "auto"; }
   const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${env.OPENROUTER_API_KEY}`, "HTTP-Referer": "https://airbeat-8mo.pages.dev", "X-Title": "AirBeat" }, body: JSON.stringify(body) });

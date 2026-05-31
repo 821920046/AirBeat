@@ -16,4 +16,4 @@ binding = "CACHE"
 id = "9b1cfe3ed757459ebb57ef7b8155c057"
 
 [vars]
-OPENROUTER_MODEL = "qwen/qwen-2.5-72b-instruct:free"
+OPENROUTER_MODEL = "qwen/qwen3-coder:free"

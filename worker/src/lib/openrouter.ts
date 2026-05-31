@@ -35,7 +35,7 @@ export async function chatCompletion(
   messages: ChatMsg[],
   tools?: unknown[]
 ): Promise<OpenRouterResponse> {
-  const model = env.OPENROUTER_MODEL || "qwen/qwen-2.5-72b-instruct:free";
+  const model = env.OPENROUTER_MODEL || "qwen/qwen3-coder:free";
 
   const body: Record<string, unknown> = {
     model,

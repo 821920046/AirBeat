@@ -16,4 +16,4 @@ binding = "AUDIO_BUCKET"
 bucket_name = "airbeat-audio"
 
 [vars]
-OPENROUTER_MODEL = "qwen/qwen-2.5-72b-instruct:free"
+OPENROUTER_MODEL = "qwen/qwen3-coder:free"
