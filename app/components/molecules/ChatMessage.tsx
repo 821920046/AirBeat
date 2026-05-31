@@ -122,22 +122,25 @@ function AddedCards({ tracks }: { tracks: TrackExt[] }) {
   const { fetchDanmaku } = useDanmaku();
   const didAutoAdd = useRef(false);
 
-  // 有 bvid 的曲目走转换流程，无 bvid 的直接加入播放列表
+  // 只有 URL 以 /audio/ 开头的才是已上传到 R2 的真实音频，可直接加入播放列表
+  // 其他（B站链接、占位URL等）都需要走转换流程
   useEffect(() => {
     if (didAutoAdd.current || tracks.length === 0) return;
     didAutoAdd.current = true;
 
-    const cloudTracks = tracks.filter((t) => t.bvid);
-    const localTracks = tracks.filter((t) => !t.bvid);
+    const readyTracks = tracks.filter((t) => t.url?.startsWith("/audio/"));
+    const needConvert = tracks.filter((t) => !t.url?.startsWith("/audio/"));
 
-    if (localTracks.length > 0) addTracks(localTracks);
+    if (readyTracks.length > 0) addTracks(readyTracks);
 
-    for (const track of cloudTracks) {
+    for (const track of needConvert) {
       if (track.bvid) {
         fetchDanmaku(track.bvid);
         convertBvid(track.bvid, track.title, track.author)
           .then((converted) => addTracks([converted]))
-          .catch(() => {});
+          .catch((err) => console.error("[AddedCards] convert failed:", err));
+      } else {
+        console.warn("[AddedCards] track has no bvid and no valid url, skipped:", track.title, track.url);
       }
     }
   }, [tracks, addTracks, convertBvid, fetchDanmaku]);
