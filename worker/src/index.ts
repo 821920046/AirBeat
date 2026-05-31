@@ -23,7 +23,7 @@ export default {
       if (method === "GET" && path === "/api/bili/search") return handleBiliSearch(url, env);
       if (method === "GET" && path === "/api/bili/danmaku") return handleBiliDanmaku(url, env);
       if (method === "GET" && path === "/api/bili/audio-url") return handleBiliAudioUrl(url, env);
-      if (method === "GET" && path === "/api/bili/proxy") return handleBiliProxy(url, env);
+      if (method === "GET" && path === "/api/bili/proxy") return handleBiliProxy(url);
 
       // AI 对话
       if (method === "POST" && path === "/api/chat") return handleChat(request, env);

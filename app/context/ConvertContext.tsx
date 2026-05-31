@@ -146,7 +146,7 @@ export function ConvertProvider({ children }: { children: ReactNode }) {
         // Step 4: 上传到 R2
         updateProgress(bvid, { stage: "uploading", progress: 95 });
 
-        const mp3Blob = new Blob([mp3Data], { type: "audio/mpeg" });
+        const mp3Blob = new Blob([new Uint8Array(mp3Data as Uint8Array)], { type: "audio/mpeg" });
         const formData = new FormData();
         formData.append("file", mp3Blob, `${sanitizeFilename(title)}_${bvid}.mp3`);
         formData.append("title", title);
