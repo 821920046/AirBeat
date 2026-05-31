@@ -46,7 +46,8 @@ export const onRequestGet = async ({ request }: { request: Request }) => {
   }
 
   // 否则转发到 api.bilibili.com（path + query）
-  const targetUrl = BILI_API + url.pathname.replace(/^\/api\/proxy/, "") + url.search;
+  // 捕获的 path 是 /api/proxy/ 后面的部分，如 x/web-interface/search/type
+  const targetUrl = BILI_API + "/" + (url.pathname.replace(/^\/api\/proxy\/?/, "") || "") + url.search;
 
   try {
     const resp = await fetch(targetUrl, {
