@@ -2,6 +2,7 @@
 
 import type { Track } from "@/app/lib/types";
 import { API_BASE } from "@/app/lib/config";
+import { getVideoInfo, getAudioUrl, fetchAudioBuffer } from "@/app/lib/bili";
 import {
   createContext,
   useCallback,
@@ -95,20 +96,17 @@ export function ConvertProvider({ children }: { children: ReactNode }) {
       });
 
       try {
-        // Step 1: 获取音频流 URL
+        // Step 1: 从前端直接调用 B站 API 获取音频 URL（B站封了 Cloudflare IP，必须从浏览器发起）
         console.log(`[Convert] ${bvid} Step 1: 获取音频URL...`);
         updateProgress(bvid, { title, stage: "downloading", progress: 0 });
-        const infoResp = await fetch(`${API_BASE}/api/bili/audio-url?bvid=${encodeURIComponent(bvid)}`);
-        if (!infoResp.ok) throw new Error(`获取音频地址失败: ${infoResp.status}`);
-        const { audioUrl } = (await infoResp.json()) as { audioUrl: string; cid: string };
+        const { cid } = await getVideoInfo(bvid);
+        const audioUrl = await getAudioUrl(bvid, cid);
         if (!audioUrl) throw new Error("未找到音频流");
         console.log(`[Convert] ${bvid} Step 1 OK, audioUrl: ${audioUrl.slice(0, 50)}...`);
 
-        // Step 2: 通过 Worker 代理下载音频（绕过 CORS）
+        // Step 2: 浏览器直接下载音频（无需后端代理）
         console.log(`[Convert] ${bvid} Step 2: 下载音频...`);
-        const proxyResp = await fetch(`${API_BASE}/api/bili/proxy?url=${encodeURIComponent(audioUrl)}`);
-        if (!proxyResp.ok) throw new Error(`音频下载失败: ${proxyResp.status}`);
-        const audioData = await proxyResp.arrayBuffer();
+        const audioData = await fetchAudioBuffer(audioUrl);
         console.log(`[Convert] ${bvid} Step 2 OK, size: ${audioData.byteLength} bytes`);
 
         // Step 3: 加载 ffmpeg.wasm 并转换

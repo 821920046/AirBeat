@@ -2,6 +2,7 @@
 
 import type { AgentState, ChatMessage } from "@/app/lib/types";
 import { API_BASE } from "@/app/lib/config";
+import { searchVideos } from "@/app/lib/bili";
 import { useSSE } from "@/app/hooks/useSSE";
 import {
   createContext,
@@ -141,29 +142,6 @@ export function AgentProvider({
         appendFromSdkPayload(msg.data, setMessages, setSessionId);
         return;
       }
-      // 搜索结果：直接用真实数据渲染曲目卡片（带真实 bvid）
-      if (msg.event === "search_results") {
-        const data = msg.data as { videos?: Array<{ bvid: string; title: string; author: string; duration: string; pic?: string }> };
-        if (data.videos?.length) {
-          const tracks = data.videos.map((v) => ({
-            id: v.bvid,
-            bvid: v.bvid,
-            title: v.title,
-            author: v.author,
-            duration: v.duration,
-            url: "",
-            date: "",
-            filename: "",
-            subDir: "",
-            size: 0,
-          }));
-          setMessages((m) => [
-            ...m,
-            { id: newId(), role: "agent" as const, content: "```tracks\n" + JSON.stringify(tracks) + "\n```", timestamp: Date.now() },
-          ]);
-        }
-        return;
-      }
       if (msg.event === "error") {
         const err =
           typeof msg.data === "string"
@@ -186,15 +164,12 @@ export function AgentProvider({
       const trimmed = text.trim();
       if (!trimmed) return;
       const ts = Date.now();
+
+      // 用户消息加入聊天
       setMessages((m) => {
         const next = [
           ...m,
-          {
-            id: newId(),
-            role: "operator" as const,
-            content: trimmed,
-            timestamp: ts,
-          },
+          { id: newId(), role: "operator" as const, content: trimmed, timestamp: ts },
         ];
         historyRef.current = next
           .filter((msg) => msg.role === "agent" || msg.role === "operator")
@@ -202,6 +177,38 @@ export function AgentProvider({
           .map((msg) => ({ role: msg.role, content: msg.content }));
         return next;
       });
+
+      // /search 命令：前端直接搜索 B站（绕过后端，避免 412）
+      const searchMatch = trimmed.match(/^\/search\s+(.+)/i);
+      if (searchMatch) {
+        const keyword = searchMatch[1].trim();
+        try {
+          const result = await searchVideos(keyword);
+          if (result.videos.length) {
+            const tracks = result.videos.map((v) => ({
+              id: v.bvid, bvid: v.bvid, title: v.title, author: v.author,
+              duration: v.duration, url: "", date: "", filename: "", subDir: "", size: 0,
+            }));
+            setMessages((m) => [
+              ...m,
+              { id: newId(), role: "agent" as const, content: "```tracks\n" + JSON.stringify(tracks) + "\n```", timestamp: Date.now() },
+            ]);
+          } else {
+            setMessages((m) => [
+              ...m,
+              { id: newId(), role: "system" as const, content: `未找到「${keyword}」的相关结果`, timestamp: Date.now() },
+            ]);
+          }
+        } catch (err) {
+          setMessages((m) => [
+            ...m,
+            { id: newId(), role: "system" as const, content: `搜索失败: ${String(err)}`, timestamp: Date.now() },
+          ]);
+        }
+        return;
+      }
+
+      // 普通消息发给 AI 后端
       await send(trimmed, { history: historyRef.current });
     },
     [send]

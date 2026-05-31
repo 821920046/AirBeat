@@ -1,7 +1,7 @@
 "use client";
 
 import type { DanmakuItem } from "@/app/lib/types";
-import { API_BASE } from "@/app/lib/config";
+import { getVideoInfo, getDanmaku } from "@/app/lib/bili";
 import { usePlayer } from "@/app/context/PlayerContext";
 import {
   createContext,
@@ -39,19 +39,14 @@ export function DanmakuProvider({ children }: { children: ReactNode }) {
     (bvidToFetch: string) => {
       if (danmakuMap[bvidToFetch]) return;
 
-      fetch(`${API_BASE}/api/bili/danmaku?bvid=${encodeURIComponent(bvidToFetch)}`)
-        .then((res) => res.json())
-        .then((json: { danmaku?: DanmakuItem[] }) => {
-          if (json.danmaku?.length) {
-            setDanmakuMap((prev) => ({
-              ...prev,
-              [bvidToFetch]: json.danmaku!,
-            }));
+      getVideoInfo(bvidToFetch)
+        .then(({ cid }) => getDanmaku(cid))
+        .then((items) => {
+          if (items.length) {
+            setDanmakuMap((prev) => ({ ...prev, [bvidToFetch]: items }));
           }
         })
-        .catch(() => {
-          /* ignore fetch errors */
-        });
+        .catch(() => { /* ignore fetch errors */ });
     },
     [danmakuMap]
   );
