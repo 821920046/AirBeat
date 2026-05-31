@@ -96,7 +96,7 @@ export function useAudioPlayer(options?: { onEnded?: () => void }) {
 
   const playTrack = useCallback((track: Track) => {
     const el = audioRef.current;
-    if (!el) return;
+    if (!el || !track.url) return;
     el.src = track.url;
     el.load();
     setProgress(0);

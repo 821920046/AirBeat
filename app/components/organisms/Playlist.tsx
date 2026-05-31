@@ -18,7 +18,7 @@ function useDurationMap(tracks: Track[]) {
 
   useEffect(() => {
     for (const t of tracks) {
-      if (map[t.id] != null || pending.current.has(t.id)) continue;
+      if (!t.url || map[t.id] != null || pending.current.has(t.id)) continue;
       pending.current.add(t.id);
 
       const audio = new Audio();
