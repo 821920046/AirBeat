@@ -12,8 +12,8 @@ const MIXIN_KEY_ENC_TAB = [
   62,11,36,20,34,44,52,
 ] as const;
 
-// B站 API 基础 URL
-const BILI_API = "https://api.bilibili.com";
+// B站 API 通过 CORS 代理转发（B站不返回 CORS 头，浏览器无法直接调用）
+const BILI_API = "/api/proxy";
 
 // --- localStorage 缓存（替代 Cloudflare KV） ---
 function getCached<T>(key: string): T | null {
@@ -167,12 +167,9 @@ export async function getAudioUrl(bvid: string, cid: string): Promise<string> {
   return audio!.baseUrl || audio!.base_url || "";
 }
 
-/** 直接从浏览器下载音频（替代后端 proxy） */
+/** 通过代理下载音频（B站 CDN 可能也不允许跨域） */
 export async function fetchAudioBuffer(audioUrl: string): Promise<ArrayBuffer> {
-  const res = await fetch(audioUrl, {
-    credentials: "omit",
-    headers: { Referer: "https://www.bilibili.com/" },
-  });
+  const res = await fetch(`/api/proxy?url=${encodeURIComponent(audioUrl)}`);
   if (!res.ok) throw new Error(`音频下载失败: ${res.status}`);
   return res.arrayBuffer();
 }
