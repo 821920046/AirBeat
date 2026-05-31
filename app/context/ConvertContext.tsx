@@ -96,18 +96,23 @@ export function ConvertProvider({ children }: { children: ReactNode }) {
 
       try {
         // Step 1: 获取音频流 URL
+        console.log(`[Convert] ${bvid} Step 1: 获取音频URL...`);
         updateProgress(bvid, { title, stage: "downloading", progress: 0 });
         const infoResp = await fetch(`${API_BASE}/api/bili/audio-url?bvid=${encodeURIComponent(bvid)}`);
         if (!infoResp.ok) throw new Error(`获取音频地址失败: ${infoResp.status}`);
         const { audioUrl } = (await infoResp.json()) as { audioUrl: string; cid: string };
         if (!audioUrl) throw new Error("未找到音频流");
+        console.log(`[Convert] ${bvid} Step 1 OK, audioUrl: ${audioUrl.slice(0, 50)}...`);
 
         // Step 2: 通过 Worker 代理下载音频（绕过 CORS）
+        console.log(`[Convert] ${bvid} Step 2: 下载音频...`);
         const proxyResp = await fetch(`${API_BASE}/api/bili/proxy?url=${encodeURIComponent(audioUrl)}`);
         if (!proxyResp.ok) throw new Error(`音频下载失败: ${proxyResp.status}`);
         const audioData = await proxyResp.arrayBuffer();
+        console.log(`[Convert] ${bvid} Step 2 OK, size: ${audioData.byteLength} bytes`);
 
         // Step 3: 加载 ffmpeg.wasm 并转换
+        console.log(`[Convert] ${bvid} Step 3: 加载 ffmpeg...`);
         updateProgress(bvid, { stage: "loading-converter", progress: 0 });
 
         const onProgress = (p: number) => {
@@ -134,9 +139,12 @@ export function ConvertProvider({ children }: { children: ReactNode }) {
         const inputName = `input_${bvid}.aac`;
         const outputName = `output_${bvid}.mp3`;
 
+        console.log(`[Convert] ${bvid} Step 3a: 写入ffmpeg虚拟文件系统...`);
         await ffmpeg.writeFile(inputName, new Uint8Array(audioData));
+        console.log(`[Convert] ${bvid} Step 3b: 开始转换...`);
         await ffmpeg.exec(["-i", inputName, "-codec:a", "libmp3lame", "-q:a", "2", outputName]);
         const mp3Data = await ffmpeg.readFile(outputName);
+        console.log(`[Convert] ${bvid} Step 3 OK, mp3 size: ${(mp3Data as Uint8Array).byteLength} bytes`);
 
         // 清理虚拟文件系统
         await ffmpeg.deleteFile(inputName);
@@ -144,6 +152,7 @@ export function ConvertProvider({ children }: { children: ReactNode }) {
         progressRef.current.delete(bvid);
 
         // Step 4: 上传到 R2
+        console.log(`[Convert] ${bvid} Step 4: 上传到 R2...`);
         updateProgress(bvid, { stage: "uploading", progress: 95 });
 
         const mp3Blob = new Blob([new Uint8Array(mp3Data as Uint8Array)], { type: "audio/mpeg" });
@@ -160,6 +169,7 @@ export function ConvertProvider({ children }: { children: ReactNode }) {
 
         if (!uploadResp.ok) throw new Error(`上传失败: ${uploadResp.status}`);
         const track = (await uploadResp.json()) as Track;
+        console.log(`[Convert] ${bvid} Done! track.id: ${track.id}, url: ${track.url}`);
 
         updateProgress(bvid, { progress: 100 });
 
@@ -173,6 +183,7 @@ export function ConvertProvider({ children }: { children: ReactNode }) {
         return track;
       } catch (err) {
         const msg = String(err);
+        console.error(`[Convert] ${bvid} failed:`, msg, err);
         setErrors((prev) => new Map(prev).set(bvid, msg));
         setConverting((prev) => {
           const next = new Map(prev);
