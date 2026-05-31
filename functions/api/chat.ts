@@ -27,15 +27,36 @@ async function getDanmaku(env: Env, cid: string): Promise<DanmakuItem[]> { const
 function rowToTrack(row: DBTrackRow): Track { return { id: String(row.id), title: row.title, author: row.author || "", date: row.date_added || "", filename: row.r2_key.split("/").pop() || "", subDir: "", size: row.file_size || 0, url: `/audio/${row.r2_key}`, bvid: row.bvid || undefined }; }
 async function searchTracks(env: Env, query: string, limit = 20): Promise<{ total: number; tracks: Track[] }> { if (!query.trim()) { const rows = await env.DB.prepare("SELECT * FROM tracks ORDER BY date_added DESC LIMIT ?").bind(limit).all<DBTrackRow>(); return { total: rows.results.length, tracks: rows.results.map(rowToTrack) }; } const like = `%${query}%`; const countRow = await env.DB.prepare("SELECT COUNT(*) as cnt FROM tracks WHERE title LIKE ? OR author LIKE ?").bind(like, like).first<{ cnt: number }>(); const rows = await env.DB.prepare("SELECT * FROM tracks WHERE title LIKE ? OR author LIKE ? ORDER BY date_added DESC LIMIT ?").bind(like, like, limit).all<DBTrackRow>(); return { total: countRow?.cnt || 0, tracks: rows.results.map(rowToTrack) }; }
 
-// --- OpenRouter ---
+// --- OpenRouter Key Pool ---
+async function getKeyPool(env: Env): Promise<string[]> {
+  try { const raw = await env.CACHE.get("api_keys"); if (raw) { const keys = JSON.parse(raw) as string[]; if (Array.isArray(keys) && keys.length > 0) return keys; } } catch {}
+  if (env.OPENROUTER_API_KEY) return [env.OPENROUTER_API_KEY];
+  return [];
+}
+
+function shuffle<T>(arr: T[]): T[] { const a = [...arr]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+
 async function chatCompletion(env: Env, messages: ChatMsg[], tools?: unknown[]): Promise<OpenRouterResponse> {
   const model = env.OPENROUTER_MODEL || "qwen/qwen3-coder:free";
   const body: Record<string, unknown> = { model, messages, temperature: 0.7, max_tokens: 2048 };
   if (tools && tools.length > 0) { body.tools = tools; body.tool_choice = "auto"; }
-  const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${env.OPENROUTER_API_KEY}`, "HTTP-Referer": "https://airbeat-8mo.pages.dev", "X-Title": "AirBeat" }, body: JSON.stringify(body) });
-  if (resp.status === 429) throw new Error("RATE_LIMITED");
-  if (!resp.ok) throw new Error(`OpenRouter error ${resp.status}: ${await resp.text()}`);
-  return resp.json() as Promise<OpenRouterResponse>;
+  const bodyStr = JSON.stringify(body);
+
+  const pool = shuffle(await getKeyPool(env));
+  if (pool.length === 0) throw new Error("No API keys configured");
+
+  let lastError = "";
+  for (const key of pool) {
+    const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}`, "HTTP-Referer": "https://airbeat-8mo.pages.dev", "X-Title": "AirBeat" },
+      body: bodyStr,
+    });
+    if (resp.status === 429) { lastError = "RATE_LIMITED"; continue; }
+    if (!resp.ok) throw new Error(`OpenRouter error ${resp.status}: ${await resp.text()}`);
+    return resp.json() as Promise<OpenRouterResponse>;
+  }
+  throw new Error(`All ${pool.length} keys rate limited. ${lastError}`);
 }
 
 // --- SSE & 工具执行 ---
@@ -62,7 +83,7 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: E
       if (Array.isArray(body.history)) for (const m of body.history.slice(-16)) msgs.push({ role: m.role === "operator" ? "user" : "assistant", content: m.content });
       msgs.push({ role: "user", content: body.message });
       let resp: OpenRouterResponse;
-      try { resp = await chatCompletion(env, msgs, TOOLS); } catch (err) { if (String(err).includes("RATE_LIMITED")) { send("output", { type: "assistant", message: { content: [{ type: "text", text: "请求频率受限，请稍后再试。" }] } }); send("done", { status: "completed" }); close(); return; } throw err; }
+      try { resp = await chatCompletion(env, msgs, TOOLS); } catch (err) { if (String(err).toLowerCase().includes("rate limited")) { send("output", { type: "assistant", message: { content: [{ type: "text", text: "所有 API key 均已限流，请稍后再试。" }] } }); send("done", { status: "completed" }); close(); return; } throw err; }
       if (resp.error) { send("error", { error: resp.error.message || "OpenRouter error" }); close(); return; }
       const choice = resp.choices?.[0]; if (!choice?.message) { send("error", { error: "No response from model" }); close(); return; }
       if (choice.message.tool_calls?.length) {
@@ -70,7 +91,7 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: E
         const toolMsgs: ChatMsg[] = [];
         for (const tc of choice.message.tool_calls) { let a: Record<string, unknown> = {}; try { a = JSON.parse(tc.function.arguments); } catch {} toolMsgs.push({ role: "tool", content: await execTool(env, tc.function.name, a), tool_call_id: tc.id }); }
         let resp2: OpenRouterResponse;
-        try { resp2 = await chatCompletion(env, [...msgs, { role: "assistant", content: choice.message.content || "", tool_calls: choice.message.tool_calls }, ...toolMsgs]); } catch (err) { if (String(err).includes("RATE_LIMITED")) { send("output", { type: "assistant", message: { content: [{ type: "text", text: "请求频率受限，请稍后再试。" }] } }); send("done", { status: "completed" }); close(); return; } throw err; }
+        try { resp2 = await chatCompletion(env, [...msgs, { role: "assistant", content: choice.message.content || "", tool_calls: choice.message.tool_calls }, ...toolMsgs]); } catch (err) { if (String(err).toLowerCase().includes("rate limited")) { send("output", { type: "assistant", message: { content: [{ type: "text", text: "所有 API key 均已限流，请稍后再试。" }] } }); send("done", { status: "completed" }); close(); return; } throw err; }
         const c2 = resp2.choices?.[0]; if (c2?.message?.content) send("output", { type: "assistant", message: { content: [{ type: "text", text: c2.message.content }] } });
       } else if (choice.message.content) { send("output", { type: "assistant", message: { content: [{ type: "text", text: choice.message.content }] } }); }
       send("done", { status: "completed" }); close();
