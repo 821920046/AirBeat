@@ -12,8 +12,9 @@ const MIXIN_KEY_ENC_TAB = [
   62,11,36,20,34,44,52,
 ] as const;
 
-// B站 API 通过 CORS 代理转发（B站不返回 CORS 头，浏览器无法直接调用）
-const BILI_API = "/api/proxy";
+// B站 API 通过 Vercel 代理转发（B站封了 Cloudflare IP，Vercel 不会被封）
+const PROXY_BASE = "https://bili-proxy-teal.vercel.app/api";
+const BILI_API = PROXY_BASE;
 
 // --- localStorage 缓存（替代 Cloudflare KV） ---
 function getCached<T>(key: string): T | null {
@@ -167,9 +168,9 @@ export async function getAudioUrl(bvid: string, cid: string): Promise<string> {
   return audio!.baseUrl || audio!.base_url || "";
 }
 
-/** 通过代理下载音频（B站 CDN 可能也不允许跨域） */
+/** 通过 Vercel 代理下载音频 */
 export async function fetchAudioBuffer(audioUrl: string): Promise<ArrayBuffer> {
-  const res = await fetch(`/api/proxy?url=${encodeURIComponent(audioUrl)}`);
+  const res = await fetch(`${PROXY_BASE}/audio?url=${encodeURIComponent(audioUrl)}`);
   if (!res.ok) throw new Error(`音频下载失败: ${res.status}`);
   return res.arrayBuffer();
 }
