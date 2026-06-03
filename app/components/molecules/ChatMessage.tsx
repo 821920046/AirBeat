@@ -118,7 +118,7 @@ type TrackExt = Track & { bvid?: string; duration?: string };
 
 function AddedCards({ tracks }: { tracks: TrackExt[] }) {
   const { addTracks } = usePlayer();
-  const { convertBvid, converting } = useConvert();
+  const { convertBvid } = useConvert();
   const { fetchDanmaku } = useDanmaku();
   const didAutoAdd = useRef(false);
 
@@ -219,7 +219,9 @@ function TrackCards({ tracks }: { tracks: TrackExt[] }) {
   const { state, addTracks } = usePlayer();
   const { convertBvid, converting } = useConvert();
   const { fetchDanmaku } = useDanmaku();
-  const inPlaylist = new Set(state.playlist.map((t) => t.id));
+  const inPlaylist = new Set(
+    state.playlist.flatMap((t) => [t.id, t.bvid].filter((v): v is string => Boolean(v)))
+  );
 
   const isCloud = tracks.some((t) => t.bvid);
 

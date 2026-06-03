@@ -1,6 +1,15 @@
-import { jsonResponse, errorResponse, CORS_HEADERS } from "../lib/cors";
+import { jsonResponse, errorResponse } from "../lib/cors";
 import { insertTrack } from "../lib/db";
 import type { Env } from "../types";
+
+function isUploadedFile(value: unknown): value is File {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "arrayBuffer" in value &&
+    typeof value.arrayBuffer === "function"
+  );
+}
 
 function sanitizeFilename(s: string): string {
   return s
@@ -19,7 +28,7 @@ export async function handleUpload(request: Request, env: Env): Promise<Response
     const author = (formData.get("author") as string) || "";
     const bvid = (formData.get("bvid") as string) || undefined;
 
-    if (!file || !(file instanceof File)) {
+    if (!isUploadedFile(file)) {
       return errorResponse("file is required", 400);
     }
 

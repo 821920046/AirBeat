@@ -1,6 +1,7 @@
 "use client";
 
 import type { Track } from "@/app/lib/types";
+import { apiUrl } from "@/app/lib/config";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 export function useAudioPlayer(options?: { onEnded?: () => void }) {
@@ -65,8 +66,8 @@ export function useAudioPlayer(options?: { onEnded?: () => void }) {
     if (!el) return;
     try {
       await el.play();
-    } catch {
-      /* autoplay blocked or no source */
+    } catch (err) {
+      console.error("Audio play failed:", err, "src:", el.currentSrc || el.src || "(empty)");
     }
   }, []);
 
@@ -97,12 +98,13 @@ export function useAudioPlayer(options?: { onEnded?: () => void }) {
   const playTrack = useCallback((track: Track) => {
     const el = audioRef.current;
     if (!el || !track.url) return;
-    el.src = track.url;
+    const src = apiUrl(track.url);
+    el.src = src;
     el.load();
     setProgress(0);
     setDuration(0);
     void el.play().catch((err) => {
-      console.error("Audio play failed:", err, "src:", track.url);
+      console.error("Audio play failed:", err, "src:", src);
     });
   }, []);
 

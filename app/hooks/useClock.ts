@@ -37,9 +37,13 @@ export function useClock() {
   const [state, setState] = useState(INITIAL_STATE);
 
   useEffect(() => {
-    setState(tick());
-    const id = setInterval(() => setState(tick()), 1000);
-    return () => clearInterval(id);
+    const update = () => setState(tick());
+    const frame = requestAnimationFrame(update);
+    const id = setInterval(update, 1000);
+    return () => {
+      cancelAnimationFrame(frame);
+      clearInterval(id);
+    };
   }, []);
 
   return state;

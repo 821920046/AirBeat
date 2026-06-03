@@ -1,7 +1,7 @@
 "use client";
 
 import type { Track } from "@/app/lib/types";
-import { API_BASE } from "@/app/lib/config";
+import { apiUrl } from "@/app/lib/config";
 import { getVideoInfo, getAudioUrl, fetchAudioBuffer } from "@/app/lib/bili";
 import {
   createContext,
@@ -160,7 +160,7 @@ export function ConvertProvider({ children }: { children: ReactNode }) {
         formData.append("author", author);
         formData.append("bvid", bvid);
 
-        const uploadResp = await fetch(`${API_BASE}/api/upload`, {
+        const uploadResp = await fetch(apiUrl("/api/upload"), {
           method: "POST",
           body: formData,
         });

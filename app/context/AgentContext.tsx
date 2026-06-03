@@ -1,7 +1,7 @@
 "use client";
 
 import type { AgentState, ChatMessage } from "@/app/lib/types";
-import { API_BASE } from "@/app/lib/config";
+import { apiUrl } from "@/app/lib/config";
 import { searchVideos } from "@/app/lib/bili";
 import { useSSE } from "@/app/hooks/useSSE";
 import {
@@ -124,7 +124,7 @@ function appendFromSdkPayload(
 
 export function AgentProvider({
   children,
-  chatApiPath = `${API_BASE}/api/chat`,
+  chatApiPath = apiUrl("/api/chat"),
 }: {
   children: ReactNode;
   chatApiPath?: string;

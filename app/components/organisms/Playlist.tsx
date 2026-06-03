@@ -2,6 +2,7 @@
 
 import { Label } from "@/app/components/atoms/Label";
 import type { Track } from "@/app/lib/types";
+import { apiUrl } from "@/app/lib/config";
 import { usePlayer } from "@/app/context/PlayerContext";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -44,7 +45,7 @@ function useDurationMap(tracks: Track[]) {
         },
         { once: true }
       );
-      audio.src = t.url;
+      audio.src = apiUrl(t.url);
     }
   }, [tracks, map]);
 

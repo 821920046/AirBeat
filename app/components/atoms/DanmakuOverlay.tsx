@@ -22,6 +22,10 @@ export function DanmakuOverlay() {
 
   const progress = state.progress;
 
+  const clearActive = useCallback(() => {
+    setActive([]);
+  }, []);
+
   const spawnDanmaku = useCallback(
     (item: DanmakuItem) => {
       const spawnId = ++spawnIdCounter;
@@ -34,36 +38,40 @@ export function DanmakuOverlay() {
   );
 
   useEffect(() => {
-    if (!enabled || !currentDanmaku.length) {
-      setActive([]);
-      lastIndexRef.current = 0;
+    const frame = requestAnimationFrame(() => {
+      if (!enabled || !currentDanmaku.length) {
+        clearActive();
+        lastIndexRef.current = 0;
+        lastProgressRef.current = progress;
+        return;
+      }
+
+      const delta = progress - lastProgressRef.current;
+      const seeked = delta < -1 || delta > 3;
       lastProgressRef.current = progress;
-      return;
-    }
 
-    const delta = progress - lastProgressRef.current;
-    const seeked = delta < -1 || delta > 3;
-    lastProgressRef.current = progress;
+      if (seeked) {
+        clearActive();
+        lastIndexRef.current = 0;
+        if (progress <= 0) return;
+        const resumeIdx = currentDanmaku.findIndex(
+          (d) => d.time >= progress - LOOKAHEAD
+        );
+        lastIndexRef.current = Math.max(0, resumeIdx);
+      }
 
-    if (seeked) {
-      setActive([]);
-      lastIndexRef.current = 0;
-      if (progress <= 0) return;
-      const resumeIdx = currentDanmaku.findIndex(
-        (d) => d.time >= progress - LOOKAHEAD
-      );
-      lastIndexRef.current = Math.max(0, resumeIdx);
-    }
+      const target = progress + LOOKAHEAD;
+      const items = currentDanmaku;
+      let idx = lastIndexRef.current;
+      while (idx < items.length && items[idx]!.time <= target) {
+        spawnDanmaku(items[idx]!);
+        idx++;
+      }
+      lastIndexRef.current = idx;
+    });
 
-    const target = progress + LOOKAHEAD;
-    const items = currentDanmaku;
-    let idx = lastIndexRef.current;
-    while (idx < items.length && items[idx]!.time <= target) {
-      spawnDanmaku(items[idx]!);
-      idx++;
-    }
-    lastIndexRef.current = idx;
-  }, [progress, enabled, currentDanmaku, spawnDanmaku]);
+    return () => cancelAnimationFrame(frame);
+  }, [progress, enabled, currentDanmaku, clearActive, spawnDanmaku]);
 
   if (!enabled || !currentDanmaku.length) return null;
 

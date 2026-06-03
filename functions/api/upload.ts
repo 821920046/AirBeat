@@ -14,7 +14,7 @@ async function insertTrack(env: Env, track: { title: string; author: string; bvi
 
 function sanitizeFilename(s: string): string { return s.replace(/[-|]/g, "_").replace(/[【】「」:\/\\*?"<>]/g, "").replace(/\s+/g, " ").trim().slice(0, 120); }
 
-function jr(d: unknown, s = 200): Response { return new Response(JSON.stringify(d), { s, headers: { "Content-Type": "application/json" } } as ResponseInit); }
+function jr(d: unknown, s = 200): Response { return new Response(JSON.stringify(d), { status: s, headers: { "Content-Type": "application/json" } }); }
 function er(m: string, s = 500): Response { return jr({ error: m }, s); }
 
 export const onRequestPost = async ({ request, env }: { request: Request; env: Env }) => {

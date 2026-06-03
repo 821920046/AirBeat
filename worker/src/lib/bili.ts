@@ -60,7 +60,10 @@ async function ensureBuvid3(env: Env): Promise<string> {
       headers: { "User-Agent": UA },
       redirect: "follow",
     });
-    const cookies = res.headers.getSetCookie?.() ?? [];
+    const headers = res.headers as Headers & { getSetCookie?: () => string[] };
+    const cookies = headers.getSetCookie?.() ?? [];
+    const setCookie = res.headers.get("Set-Cookie");
+    if (setCookie) cookies.push(setCookie);
     for (const c of cookies) {
       const match = c.match(/buvid3=([^;]+)/);
       if (match) {

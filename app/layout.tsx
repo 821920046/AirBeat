@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-page-custom-font */
 import { Providers } from "@/app/components/providers";
 import type { Metadata } from "next";
 import { Caveat, Inter, Press_Start_2P, Space_Grotesk } from "next/font/google";

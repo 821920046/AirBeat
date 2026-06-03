@@ -21,6 +21,7 @@ type DanmakuCtxValue = {
 };
 
 const DanmakuContext = createContext<DanmakuCtxValue | null>(null);
+const EMPTY_DANMAKU: DanmakuItem[] = [];
 
 export function DanmakuProvider({ children }: { children: ReactNode }) {
   const [enabled, setEnabled] = useState(false);
@@ -51,7 +52,10 @@ export function DanmakuProvider({ children }: { children: ReactNode }) {
     [danmakuMap]
   );
 
-  const currentDanmaku = bvid ? danmakuMap[bvid] ?? [] : [];
+  const currentDanmaku = useMemo(
+    () => (bvid ? danmakuMap[bvid] ?? EMPTY_DANMAKU : EMPTY_DANMAKU),
+    [bvid, danmakuMap]
+  );
   const hasDanmaku = currentDanmaku.length > 0;
 
   const value = useMemo<DanmakuCtxValue>(

@@ -12,7 +12,7 @@ async function searchTracks(env: Env, query: string, limit = 20): Promise<{ tota
   return { total: countRow?.cnt || 0, tracks: rows.results.map(rowToTrack) };
 }
 
-function jr(d: unknown, s = 200): Response { return new Response(JSON.stringify(d), { s, headers: { "Content-Type": "application/json" } } as ResponseInit); }
+function jr(d: unknown, s = 200): Response { return new Response(JSON.stringify(d), { status: s, headers: { "Content-Type": "application/json" } }); }
 function er(m: string, s = 500): Response { return jr({ error: m }, s); }
 
 export const onRequestGet = async ({ request, env }: { request: Request; env: Env }) => {

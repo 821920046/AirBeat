@@ -1,4 +1,4 @@
-import { searchVideos, getVideoInfo, getDanmaku } from "../lib/bili";
+import { searchVideos } from "../lib/bili";
 import { searchTracks } from "../lib/db";
 import { chatCompletion } from "../lib/openrouter";
 import { CORS_HEADERS } from "../lib/cors";

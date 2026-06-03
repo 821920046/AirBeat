@@ -24,7 +24,6 @@ export function CommandInput({
   const inputRef = useRef<HTMLInputElement>(null);
   const measureRef = useRef<HTMLSpanElement>(null);
   const valueRef = useRef(value);
-  valueRef.current = value;
 
   const syncCursor = useCallback(() => {
     const input = inputRef.current;
@@ -36,6 +35,7 @@ export function CommandInput({
   }, []);
 
   useEffect(() => {
+    valueRef.current = value;
     syncCursor();
   }, [value, syncCursor]);
 
@@ -43,6 +43,7 @@ export function CommandInput({
     const t = valueRef.current.trim();
     if (!t || disabled) return;
     onSubmit(t);
+    valueRef.current = "";
     setValue("");
   }, [disabled, onSubmit]);
 
@@ -69,7 +70,9 @@ export function CommandInput({
             value={value}
             placeholder={placeholder}
             onChange={(e) => {
-              setValue(e.target.value);
+              const next = e.target.value;
+              valueRef.current = next;
+              setValue(next);
               requestAnimationFrame(syncCursor);
             }}
             onKeyDown={onKeyDown}

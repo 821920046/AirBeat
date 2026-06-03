@@ -29,6 +29,10 @@ type PlayerCtx = {
 
 const PlayerContext = createContext<PlayerCtx | null>(null);
 
+function trackKeys(track: Track): string[] {
+  return [track.id, track.bvid].filter((v): v is string => Boolean(v));
+}
+
 export function PlayerProvider({ children }: { children: ReactNode }) {
   const [playlist, setPlaylist] = useState<Track[]>([]);
   const [index, setIndex] = useState(-1);
@@ -76,18 +80,23 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     index >= 0 && index < playlist.length ? playlist[index] ?? null : null;
 
   const addTracks = useCallback((tracks: Track[]) => {
-    setPlaylist((prev) => {
-      const ids = new Set(prev.map((t) => t.id));
-      const fresh = tracks.filter((t) => !ids.has(t.id));
-      if (!fresh.length) return prev;
-      const next = [...prev, ...fresh];
-      playlistRef.current = next;
-      return next;
+    if (!tracks.length) return;
+
+    const seen = new Set(playlistRef.current.flatMap(trackKeys));
+    const fresh = tracks.filter((track) => {
+      const keys = trackKeys(track);
+      if (keys.some((key) => seen.has(key))) return false;
+      keys.forEach((key) => seen.add(key));
+      return true;
     });
+    if (!fresh.length) return;
+
+    const next = [...playlistRef.current, ...fresh];
+    playlistRef.current = next;
+    setPlaylist(next);
 
     if (indexRef.current < 0) {
-      const cur = playlistRef.current;
-      const first = cur[0];
+      const first = next[0];
       if (first) {
         setIndex(0);
         indexRef.current = 0;
@@ -197,8 +206,16 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         return;
       }
     }
+
+    const el = audioRef.current;
+    const currentTrack = playlistRef.current[indexRef.current];
+    if (currentTrack && el?.paused && !el.src && !el.currentSrc) {
+      playTrack(currentTrack);
+      return;
+    }
+
     return toggle();
-  }, [toggle, playTrack]);
+  }, [audioRef, toggle, playTrack]);
 
   const stop = useCallback(() => {
     pause();

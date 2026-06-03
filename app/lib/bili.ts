@@ -50,15 +50,6 @@ function signParams(params: Record<string, string | number>, mixinKey: string): 
   return signed;
 }
 
-// --- buvid3 ---
-function getBuvid3(): string {
-  const cached = getCached<string>("bili_buvid3");
-  if (cached) return cached;
-  const id = `${crypto.randomUUID()}infoc`;
-  setCache("bili_buvid3", id, 86400_000); // 24 小时
-  return id;
-}
-
 // --- WBI Keys ---
 async function getWbiKeys(): Promise<{ imgKey: string; subKey: string }> {
   const cached = getCached<{ imgKey: string; subKey: string }>("bili_wbi");

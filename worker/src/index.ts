@@ -9,7 +9,7 @@ import { handleTracks } from "./handlers/tracks";
 import { handleAudio } from "./handlers/audio";
 import type { Env } from "./types";
 
-export default {
+const worker = {
   async fetch(request: Request, env: Env): Promise<Response> {
     const corsResponse = handleOptions(request);
     if (corsResponse) return corsResponse;
@@ -42,3 +42,5 @@ export default {
     }
   },
 };
+
+export default worker;

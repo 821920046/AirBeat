@@ -14,33 +14,40 @@ export async function handleAudio(request: Request, env: Env): Promise<Response>
 
   try {
     if (rangeHeader) {
-      const match = rangeHeader.match(/bytes=(\d+)-(\d*)/);
+      const match = rangeHeader.match(/^bytes=(\d+)-(\d*)$/);
       if (!match) return errorResponse("Invalid Range header", 400);
 
       const offset = parseInt(match[1]!, 10);
-      const endStr = match[2];
-      const length = endStr ? parseInt(endStr, 10) - offset + 1 : undefined;
+      const requestedEnd = match[2] ? parseInt(match[2], 10) : undefined;
+      if (!Number.isFinite(offset) || (requestedEnd !== undefined && requestedEnd < offset)) {
+        return errorResponse("Invalid Range header", 400);
+      }
 
+      const head = await env.AUDIO_BUCKET.head(r2Key);
+      if (!head) return errorResponse("Not found", 404);
+
+      const headers = new Headers(CORS_HEADERS);
+      headers.set("Content-Type", "audio/mpeg");
+      headers.set("Accept-Ranges", "bytes");
+
+      const total = head.size;
+      if (offset >= total) {
+        headers.set("Content-Range", `bytes */${total}`);
+        return new Response(null, { status: 416, headers });
+      }
+
+      const end = requestedEnd === undefined ? total - 1 : Math.min(requestedEnd, total - 1);
+      const length = end - offset + 1;
       const object = await env.AUDIO_BUCKET.get(r2Key, {
         range: { offset, length },
       });
 
       if (!object) return errorResponse("Not found", 404);
 
-      const headers = new Headers(CORS_HEADERS);
-      headers.set("Content-Type", "audio/mpeg");
-      headers.set("Accept-Ranges", "bytes");
+      headers.set("Content-Range", `bytes ${offset}-${end}/${total}`);
+      headers.set("Content-Length", String(length));
 
-      if (object.range) {
-        const total = object.size;
-        const start = object.range.offset;
-        const end = start + (object.range.length || 0) - 1;
-        headers.set("Content-Range", `bytes ${start}-${end}/${total}`);
-        headers.set("Content-Length", String(object.range.length));
-        return new Response(object.body, { status: 206, headers });
-      }
-
-      return new Response(object.body, { status: 200, headers });
+      return new Response(object.body, { status: 206, headers });
     }
 
     // 无 Range 请求
