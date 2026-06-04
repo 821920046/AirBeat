@@ -330,7 +330,7 @@ function TrackCards({ tracks }: { tracks: TrackExt[] }) {
                 {btnState === "converting" && (
                   <div className="mt-1.5">
                     <div className="flex items-center justify-between text-[10px] opacity-60" style={{ fontFamily: "var(--font-headline)" }}>
-                      <span>{stage === "downloading" ? "DOWNLOADING" : stage === "loading-converter" ? "LOADING CONVERTER" : stage === "converting" ? "CONVERTING" : stage === "uploading" ? "UPLOADING" : "PROCESSING"}</span>
+                      <span>{stage === "downloading" ? "DOWNLOADING" : stage === "decoding" ? "DECODING" : stage === "encoding" ? "ENCODING" : stage === "uploading" ? "UPLOADING" : "PROCESSING"}</span>
                       <span>{progress ?? 0}%</span>
                     </div>
                     <div className="mt-0.5 h-1 w-full rounded-full" style={{ backgroundColor: "var(--color-surface-container-high)" }}>

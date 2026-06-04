@@ -16,7 +16,7 @@ import {
 interface ConvertProgress {
   progress: number;
   title: string;
-  stage: "downloading" | "loading-converter" | "converting" | "uploading";
+  stage: "downloading" | "decoding" | "encoding" | "uploading";
 }
 
 type ConvertCtxValue = {
@@ -27,55 +27,74 @@ type ConvertCtxValue = {
 
 const ConvertContext = createContext<ConvertCtxValue | null>(null);
 
-// ffmpeg.wasm 单例
-let ffmpegInstance: InstanceType<Awaited<typeof import("@ffmpeg/ffmpeg")>["FFmpeg"]> | null = null;
-let ffmpegLoading: Promise<void> | null = null;
-
-async function getFfmpeg(
-  onProgress: (p: number) => void
-): Promise<InstanceType<Awaited<typeof import("@ffmpeg/ffmpeg")>["FFmpeg"]>> {
-  if (ffmpegInstance) return ffmpegInstance;
-
-  if (!ffmpegLoading) {
-    ffmpegLoading = (async () => {
-      const { FFmpeg } = await import("@ffmpeg/ffmpeg");
-      const { toBlobURL } = await import("@ffmpeg/util");
-
-      const ffmpeg = new FFmpeg();
-      const baseURL = "https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm";
-
-      ffmpeg.on("progress", ({ progress }) => {
-        onProgress(Math.round(progress * 100));
-      });
-
-      await ffmpeg.load({
-        coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
-        wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
-      });
-
-      ffmpegInstance = ffmpeg;
-    })();
-  }
-
-  await ffmpegLoading;
-  return ffmpegInstance!;
-}
-
 function sanitizeFilename(s: string): string {
   return s
     .replace(/[-|]/g, "_")
-    .replace(/[【】「」:\/\\*?"<>【】]/g, "")
+    .replace(/[\u3001\u3002\u300c\u300d\/\\*?"<>]/g, "")
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 120);
 }
 
+/** Convert AudioBuffer (PCM) to WAV bytes */
+function encodeWav(buffer: AudioBuffer): Uint8Array {
+  const numChannels = buffer.numberOfChannels;
+  const sampleRate = buffer.sampleRate;
+  const format = 1; // PCM
+  const bitsPerSample = 16;
+  const channelInterleaved = true;
+
+  const dataView = new DataView(new ArrayBuffer(0));
+  const byteRate = (sampleRate * numChannels * bitsPerSample) / 8;
+  const blockAlign = (numChannels * bitsPerSample) / 8;
+  const dataSize = buffer.length * blockAlign;
+  const headerSize = 44;
+  const totalSize = headerSize + dataSize;
+
+  const arrayBuffer = new ArrayBuffer(totalSize);
+  const view = new DataView(arrayBuffer);
+
+  function writeString(offset: number, str: string) {
+    for (let i = 0; i < str.length; i++) {
+      view.setUint8(offset + i, str.charCodeAt(i));
+    }
+  }
+
+  writeString(0, "RIFF");
+  view.setUint32(4, totalSize - 8, true);
+  writeString(8, "WAVE");
+  writeString(12, "fmt ");
+  view.setUint32(16, 16, true); // fmt chunk size
+  view.setUint16(20, format, true);
+  view.setUint16(22, numChannels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, byteRate, true);
+  view.setUint16(32, blockAlign, true);
+  view.setUint16(34, bitsPerSample, true);
+  writeString(36, "data");
+  view.setUint32(40, dataSize, true);
+
+  // Interleave channels and write PCM data
+  const channels: Float32Array[] = [];
+  for (let c = 0; c < numChannels; c++) {
+    channels.push(buffer.getChannelData(c));
+  }
+
+  let offset = 44;
+  for (let i = 0; i < buffer.length; i++) {
+    for (let c = 0; c < numChannels; c++) {
+      const sample = Math.max(-1, Math.min(1, channels[c][i]));
+      view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
+      offset += 2;
+    }
+  }
+
+  return new Uint8Array(arrayBuffer);
+}
+
 export function ConvertProvider({ children }: { children: ReactNode }) {
   const [converting, setConverting] = useState<Map<string, ConvertProgress>>(new Map());
   const [errors, setErrors] = useState<Map<string, string>>(new Map());
-
-  // 进度回调 ref（ffmpeg 实例可能在创建后才绑定）
-  const progressRef = useRef(new Map<string, (p: number) => void>());
 
   const updateProgress = useCallback((bvid: string, update: Partial<ConvertProgress>) => {
     setConverting((prev) => {
@@ -88,7 +107,7 @@ export function ConvertProvider({ children }: { children: ReactNode }) {
 
   const convertBvid = useCallback(
     async (bvid: string, title: string, author: string): Promise<Track> => {
-      // 清除之前的错误
+      // Clear previous error
       setErrors((prev) => {
         const next = new Map(prev);
         next.delete(bvid);
@@ -96,7 +115,7 @@ export function ConvertProvider({ children }: { children: ReactNode }) {
       });
 
       try {
-        // Step 1: 从前端直接调用 B站 API 获取音频 URL（B站封了 Cloudflare IP，必须从浏览器发起）
+        // Step 1: Fetch audio URL from Bilibili
         console.log(`[Convert] ${bvid} Step 1: 获取音频URL...`);
         updateProgress(bvid, { title, stage: "downloading", progress: 0 });
         const { cid } = await getVideoInfo(bvid);
@@ -104,58 +123,41 @@ export function ConvertProvider({ children }: { children: ReactNode }) {
         if (!audioUrl) throw new Error("未找到音频流");
         console.log(`[Convert] ${bvid} Step 1 OK, audioUrl: ${audioUrl.slice(0, 50)}...`);
 
-        // Step 2: 浏览器直接下载音频（无需后端代理）
+        // Step 2: Download audio via proxy
         console.log(`[Convert] ${bvid} Step 2: 下载音频...`);
         const audioData = await fetchAudioBuffer(audioUrl);
         console.log(`[Convert] ${bvid} Step 2 OK, size: ${audioData.byteLength} bytes`);
 
-        // Step 3: 加载 ffmpeg.wasm 并转换
-        console.log(`[Convert] ${bvid} Step 3: 加载 ffmpeg...`);
-        updateProgress(bvid, { stage: "loading-converter", progress: 0 });
+        // Step 3: Decode AAC to PCM using Web Audio API (no ffmpeg needed)
+        console.log(`[Convert] ${bvid} Step 3: 解码音频...`);
+        updateProgress(bvid, { stage: "decoding", progress: 40 });
 
-        const onProgress = (p: number) => {
-          updateProgress(bvid, { progress: p });
-        };
+        let audioBuffer: AudioBuffer;
+        try {
+          const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+          audioBuffer = await audioCtx.decodeAudioData(audioData);
+          audioCtx.close();
+        } catch (err) {
+          console.error(`[Convert] ${bvid} decodeAudioData failed:`, err);
+          throw new Error(`音频解码失败: ${String(err)}`);
+        }
 
-        // 每次更新进度回调
-        progressRef.current.set(bvid, onProgress);
+        console.log(`[Convert] ${bvid} Step 3 OK, channels: ${audioBuffer.numberOfChannels}, samples: ${audioBuffer.length}, sampleRate: ${audioBuffer.sampleRate}`);
 
-        const ffmpeg = await getFfmpeg((p) => {
-          const cb = progressRef.current.get(bvid);
-          if (cb) cb(p);
-        });
+        // Encode to WAV
+        console.log(`[Convert] ${bvid} Step 3b: 编码 WAV...`);
+        updateProgress(bvid, { stage: "encoding", progress: 70 });
+        const wavData = encodeWav(audioBuffer);
+        console.log(`[Convert] ${bvid} Step 3 OK, WAV size: ${wavData.byteLength} bytes`);
 
-        // 更新回调（ffmpeg 实例复用后回调可能变了）
-        ffmpeg.on("progress", ({ progress }) => {
-          const cb = progressRef.current.get(bvid);
-          if (cb) cb(Math.round(progress * 100));
-        });
-
-        updateProgress(bvid, { stage: "converting", progress: 0 });
-
-        // 写入虚拟文件系统
-        const inputName = `input_${bvid}.aac`;
-        const outputName = `output_${bvid}.mp3`;
-
-        console.log(`[Convert] ${bvid} Step 3a: 写入ffmpeg虚拟文件系统...`);
-        await ffmpeg.writeFile(inputName, new Uint8Array(audioData));
-        console.log(`[Convert] ${bvid} Step 3b: 开始转换...`);
-        await ffmpeg.exec(["-i", inputName, "-codec:a", "libmp3lame", "-q:a", "2", outputName]);
-        const mp3Data = await ffmpeg.readFile(outputName);
-        console.log(`[Convert] ${bvid} Step 3 OK, mp3 size: ${(mp3Data as Uint8Array).byteLength} bytes`);
-
-        // 清理虚拟文件系统
-        await ffmpeg.deleteFile(inputName);
-        await ffmpeg.deleteFile(outputName);
-        progressRef.current.delete(bvid);
-
-        // Step 4: 上传到 R2
-        console.log(`[Convert] ${bvid} Step 4: 上传到 R2...`);
         updateProgress(bvid, { stage: "uploading", progress: 95 });
 
-        const mp3Blob = new Blob([new Uint8Array(mp3Data as Uint8Array)], { type: "audio/mpeg" });
+        // Step 4: Upload to R2
+        console.log(`[Convert] ${bvid} Step 4: 上传到 R2...`);
+
+        const wavBlob = new Blob([wavData as unknown as BlobPart], { type: "audio/wav" });
         const formData = new FormData();
-        formData.append("file", mp3Blob, `${sanitizeFilename(title)}_${bvid}.mp3`);
+        formData.append("file", wavBlob, `${sanitizeFilename(title)}_${bvid}.wav`);
         formData.append("title", title);
         formData.append("author", author);
         formData.append("bvid", bvid);
@@ -171,7 +173,7 @@ export function ConvertProvider({ children }: { children: ReactNode }) {
 
         updateProgress(bvid, { progress: 100 });
 
-        // 清除状态
+        // Clear status
         setConverting((prev) => {
           const next = new Map(prev);
           next.delete(bvid);

@@ -12,7 +12,7 @@ const MIXIN_KEY_ENC_TAB = [
   62,11,36,20,34,44,52,
 ] as const;
 
-// B站 API 通过 Vercel 代理转发（B站封了 Cloudflare IP，Vercel 不会被封）
+// B站 API 通过代理转发（B站封了 Cloudflare IP，需从浏览器发起）
 const PROXY_BASE = "https://bili-proxy-teal.vercel.app/api";
 const BILI_API = PROXY_BASE;
 
@@ -159,9 +159,9 @@ export async function getAudioUrl(bvid: string, cid: string): Promise<string> {
   return audio!.baseUrl || audio!.base_url || "";
 }
 
-/** 通过 Vercel 代理下载音频 */
+/** 通过代理下载音频 */
 export async function fetchAudioBuffer(audioUrl: string): Promise<ArrayBuffer> {
-  const res = await fetch(`${PROXY_BASE}/audio?url=${encodeURIComponent(audioUrl)}`);
+  const res = await fetch(`/api/bili/proxy?url=${encodeURIComponent(audioUrl)}`);
   if (!res.ok) throw new Error(`音频下载失败: ${res.status}`);
   return res.arrayBuffer();
 }

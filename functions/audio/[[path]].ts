@@ -3,9 +3,9 @@ interface Env { DB: D1Database; AUDIO_BUCKET: R2Bucket; CACHE: KVNamespace; OPEN
 const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Expose-Headers": "Content-Range, Accept-Ranges, Content-Length" };
 function er(m: string, s = 500): Response { return new Response(JSON.stringify({ error: m }), { status: s, headers: { "Content-Type": "application/json", ...CORS } }); }
 
-function audioHeaders(): Headers {
+function audioHeaders(contentType = "audio/mpeg"): Headers {
   const headers = new Headers(CORS);
-  headers.set("Content-Type", "audio/mpeg");
+  headers.set("Content-Type", contentType);
   headers.set("Accept-Ranges", "bytes");
   return headers;
 }
@@ -32,7 +32,8 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: En
       if (!head) return er("Not found", 404);
 
       const total = head.size;
-      const headers = audioHeaders();
+      const contentType = head?.httpMetadata?.contentType || "audio/mpeg";
+      const headers = audioHeaders(contentType);
       if (offset >= total) {
         headers.set("Content-Range", `bytes */${total}`);
         return new Response(null, { status: 416, headers });
@@ -51,7 +52,8 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: En
     const object = await env.AUDIO_BUCKET.get(r2Key);
     if (!object) return er("Not found", 404);
 
-    const headers = audioHeaders();
+    const contentType = object.httpMetadata?.contentType || "audio/mpeg";
+    const headers = audioHeaders(contentType);
     headers.set("Content-Length", String(object.size));
     return new Response(object.body, { status: 200, headers });
   } catch (err) { console.error("audio streaming error:", err); return er(String(err), 500); }

@@ -21,9 +21,11 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: E
   try {
     const formData = await request.formData(); const file = formData.get("file"); const title = (formData.get("title") as string) || "untitled"; const author = (formData.get("author") as string) || ""; const bvid = (formData.get("bvid") as string) || undefined;
     if (!file || !(file instanceof File)) return er("file is required", 400);
-    const r2Key = `audio/${Date.now()}_${sanitizeFilename(title)}.mp3`;
+    const ext = file.name.split(".").pop()?.toLowerCase() || "mp3";
+    const r2Key = `audio/${Date.now()}_${sanitizeFilename(title)}.${ext}`;
     const arrayBuffer = await file.arrayBuffer();
-    await env.AUDIO_BUCKET.put(r2Key, arrayBuffer, { httpMetadata: { contentType: "audio/mpeg" } });
+    const contentType = file.type || (ext === "wav" ? "audio/wav" : "audio/mpeg");
+    await env.AUDIO_BUCKET.put(r2Key, arrayBuffer, { httpMetadata: { contentType } });
     return jr(await insertTrack(env, { title, author, bvid, r2_key: r2Key, file_size: arrayBuffer.byteLength }));
   } catch (err) { console.error("upload error:", err); return er(String(err), 500); }
 };
