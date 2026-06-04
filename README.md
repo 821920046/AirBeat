@@ -14,7 +14,7 @@ AI 驱动的智能音乐播放器。随时随地，免费听歌。
 
 - **AI 对话交互** — 通过自然语言告诉 AI 你想听什么，智能搜索推荐
 - **B站海量曲库** — 搜索 B站任意视频，一键转为音频
-- **浏览器端转换** — 基于 ffmpeg.wasm，无需服务器，浏览器内完成 AAC→MP3 转换
+- **浏览器端转换** — 基于 Web Audio API，无需服务器，浏览器内完成 AAC→WAV 转换
 - **弹幕叠加** — 播放 B站来源的音频时，同步显示原视频弹幕
 - **复古终端 UI** — 赛博朋克风格界面，实时状态面板
 - **全平台免费部署** — 基于 Cloudflare 免费服务，零成本运行
@@ -28,7 +28,7 @@ AI 驱动的智能音乐播放器。随时随地，免费听歌。
 | 后端 | Cloudflare Pages Functions |
 | 存储 | Cloudflare R2 (音频) + D1 (元数据) + KV (缓存) |
 | AI | OpenRouter 免费模型 (function calling) |
-| 转换 | ffmpeg.wasm (浏览器端 AAC→MP3) |
+| 转换 | Web Audio API (浏览器端 AAC→WAV) |
 
 ## Getting Started
 
@@ -134,7 +134,7 @@ AirBeat/
 │   ├── context/             # React Context
 │   │   ├── PlayerContext    # 音频播放状态
 │   │   ├── AgentContext     # AI 对话状态
-│   │   ├── ConvertContext   # ffmpeg.wasm 转换状态
+│   │   ├── ConvertContext   # Web Audio API 转换状态
 │   │   └── DanmakuContext   # 弹幕状态
 │   ├── hooks/               # 自定义 Hooks
 │   └── lib/                 # 类型定义 & 配置
