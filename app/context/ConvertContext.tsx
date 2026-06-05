@@ -16,7 +16,7 @@ import {
 interface ConvertProgress {
   progress: number;
   title: string;
-  stage: "downloading" | "decoding" | "encoding" | "uploading";
+  stage: "downloading" | "uploading";
 }
 
 type ConvertCtxValue = {
@@ -34,62 +34,6 @@ function sanitizeFilename(s: string): string {
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 120);
-}
-
-/** Convert AudioBuffer (PCM) to WAV bytes */
-function encodeWav(buffer: AudioBuffer): Uint8Array {
-  const numChannels = buffer.numberOfChannels;
-  const sampleRate = buffer.sampleRate;
-  const format = 1; // PCM
-  const bitsPerSample = 16;
-  const channelInterleaved = true;
-
-  const dataView = new DataView(new ArrayBuffer(0));
-  const byteRate = (sampleRate * numChannels * bitsPerSample) / 8;
-  const blockAlign = (numChannels * bitsPerSample) / 8;
-  const dataSize = buffer.length * blockAlign;
-  const headerSize = 44;
-  const totalSize = headerSize + dataSize;
-
-  const arrayBuffer = new ArrayBuffer(totalSize);
-  const view = new DataView(arrayBuffer);
-
-  function writeString(offset: number, str: string) {
-    for (let i = 0; i < str.length; i++) {
-      view.setUint8(offset + i, str.charCodeAt(i));
-    }
-  }
-
-  writeString(0, "RIFF");
-  view.setUint32(4, totalSize - 8, true);
-  writeString(8, "WAVE");
-  writeString(12, "fmt ");
-  view.setUint32(16, 16, true); // fmt chunk size
-  view.setUint16(20, format, true);
-  view.setUint16(22, numChannels, true);
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, byteRate, true);
-  view.setUint16(32, blockAlign, true);
-  view.setUint16(34, bitsPerSample, true);
-  writeString(36, "data");
-  view.setUint32(40, dataSize, true);
-
-  // Interleave channels and write PCM data
-  const channels: Float32Array[] = [];
-  for (let c = 0; c < numChannels; c++) {
-    channels.push(buffer.getChannelData(c));
-  }
-
-  let offset = 44;
-  for (let i = 0; i < buffer.length; i++) {
-    for (let c = 0; c < numChannels; c++) {
-      const sample = Math.max(-1, Math.min(1, channels[c][i]));
-      view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
-      offset += 2;
-    }
-  }
-
-  return new Uint8Array(arrayBuffer);
 }
 
 export function ConvertProvider({ children }: { children: ReactNode }) {
@@ -115,49 +59,30 @@ export function ConvertProvider({ children }: { children: ReactNode }) {
       });
 
       try {
-        // Step 1: Fetch audio URL from Bilibili
+        // Step 1: 获取B站DASH音频流URL，再通过代理下载原始AAC字节
+        // 不做客户端解码/重编码 — 原始AAC-in-MP4容器浏览器原生支持播放
+        // 避免 ~10x PCM膨胀、WAV量化bug、移动端OOM
         console.log(`[Convert] ${bvid} Step 1: 获取音频URL...`);
-        updateProgress(bvid, { title, stage: "downloading", progress: 0 });
+        updateProgress(bvid, { title, stage: "downloading", progress: 10 });
         const { cid } = await getVideoInfo(bvid);
         const audioUrl = await getAudioUrl(bvid, cid);
         if (!audioUrl) throw new Error("未找到音频流");
         console.log(`[Convert] ${bvid} Step 1 OK, audioUrl: ${audioUrl.slice(0, 50)}...`);
 
-        // Step 2: Download audio via proxy
-        console.log(`[Convert] ${bvid} Step 2: 下载音频...`);
+        // Step 2: 通过代理下载原始AAC/M4A音频
+        console.log(`[Convert] ${bvid} Step 2: 下载原始音频...`);
+        updateProgress(bvid, { stage: "downloading", progress: 40 });
         const audioData = await fetchAudioBuffer(audioUrl);
         console.log(`[Convert] ${bvid} Step 2 OK, size: ${audioData.byteLength} bytes`);
 
-        // Step 3: Decode AAC to PCM using Web Audio API (no ffmpeg needed)
-        console.log(`[Convert] ${bvid} Step 3: 解码音频...`);
-        updateProgress(bvid, { stage: "decoding", progress: 40 });
+        // Step 3: 直接上传原始AAC bytes到R2，格式为m4a（AAC-in-MP4容器）
+        // 不做客户端转码 — 节省CPU和内存，避免格式转换成bug
+        updateProgress(bvid, { stage: "uploading", progress: 70 });
+        console.log(`[Convert] ${bvid} Step 3: 上传原始M4A到 R2...`);
 
-        let audioBuffer: AudioBuffer;
-        try {
-          const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-          audioBuffer = await audioCtx.decodeAudioData(audioData);
-          audioCtx.close();
-        } catch (err) {
-          console.error(`[Convert] ${bvid} decodeAudioData failed:`, err);
-          throw new Error(`音频解码失败: ${String(err)}`);
-        }
-
-        console.log(`[Convert] ${bvid} Step 3 OK, channels: ${audioBuffer.numberOfChannels}, samples: ${audioBuffer.length}, sampleRate: ${audioBuffer.sampleRate}`);
-
-        // Encode to WAV
-        console.log(`[Convert] ${bvid} Step 3b: 编码 WAV...`);
-        updateProgress(bvid, { stage: "encoding", progress: 70 });
-        const wavData = encodeWav(audioBuffer);
-        console.log(`[Convert] ${bvid} Step 3 OK, WAV size: ${wavData.byteLength} bytes`);
-
-        updateProgress(bvid, { stage: "uploading", progress: 95 });
-
-        // Step 4: Upload to R2
-        console.log(`[Convert] ${bvid} Step 4: 上传到 R2...`);
-
-        const wavBlob = new Blob([wavData as unknown as BlobPart], { type: "audio/wav" });
+        const m4aBlob = new Blob([audioData], { type: "audio/mp4" });
         const formData = new FormData();
-        formData.append("file", wavBlob, `${sanitizeFilename(title)}_${bvid}.wav`);
+        formData.append("file", m4aBlob, `${sanitizeFilename(title)}_${bvid}.m4a`);
         formData.append("title", title);
         formData.append("author", author);
         formData.append("bvid", bvid);

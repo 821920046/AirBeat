@@ -79,15 +79,28 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: E
       let resp: OpenRouterResponse;
       try { resp = await chatCompletion(env, msgs, TOOLS); } catch (err) { if (String(err).toLowerCase().includes("rate limited")) { send("output", { type: "assistant", message: { content: [{ type: "text", text: "所有 API key 均已限流，请稍后再试。" }] } }); send("done", { status: "completed" }); close(); return; } throw err; }
       if (resp.error) { send("error", { error: resp.error.message || "OpenRouter error" }); close(); return; }
-      const choice = resp.choices?.[0]; if (!choice?.message) { send("error", { error: "No response from model" }); close(); return; }
-      if (choice.message.tool_calls?.length) {
-        for (const tc of choice.message.tool_calls) send("output", { type: "tool_call", name: tc.function.name, arguments: tc.function.arguments });
-        const toolMsgs: ChatMsg[] = [];
-        for (const tc of choice.message.tool_calls) { let a: Record<string, unknown> = {}; try { a = JSON.parse(tc.function.arguments); } catch {} toolMsgs.push({ role: "tool", content: await execTool(env, tc.function.name, a), tool_call_id: tc.id }); }
-        let resp2: OpenRouterResponse;
-        try { resp2 = await chatCompletion(env, [...msgs, { role: "assistant", content: choice.message.content || "", tool_calls: choice.message.tool_calls }, ...toolMsgs]); } catch (err) { if (String(err).toLowerCase().includes("rate limited")) { send("output", { type: "assistant", message: { content: [{ type: "text", text: "所有 API key 均已限流，请稍后再试。" }] } }); send("done", { status: "completed" }); close(); return; } throw err; }
-        const c2 = resp2.choices?.[0]; if (c2?.message?.content) send("output", { type: "assistant", message: { content: [{ type: "text", text: c2.message.content }] } });
-      } else if (choice.message.content) { send("output", { type: "assistant", message: { content: [{ type: "text", text: choice.message.content }] } }); }
+      // 多轮 tool_call 循环 — 最多 3 轮，支持 AI 连续调用多个工具
+      const MAX_TOOL_ROUNDS = 3;
+      let currentMessages = [...msgs];
+      for (let round = 1; round <= MAX_TOOL_ROUNDS; round++) {
+        const choice = resp.choices?.[0]; if (!choice?.message) { send("error", { error: "No response from model" }); close(); return; }
+
+        if (choice.message.tool_calls?.length) {
+          for (const tc of choice.message.tool_calls) send("output", { type: "tool_call", name: tc.function.name, arguments: tc.function.arguments });
+          const toolMsgs: ChatMsg[] = [];
+          for (const tc of choice.message.tool_calls) { let a: Record<string, unknown> = {}; try { a = JSON.parse(tc.function.arguments); } catch {} toolMsgs.push({ role: "tool", content: await execTool(env, tc.function.name, a), tool_call_id: tc.id }); }
+          currentMessages = [...currentMessages, { role: "assistant", content: choice.message.content || "", tool_calls: choice.message.tool_calls }, ...toolMsgs];
+          // 继续下一轮，让 AI 处理工具结果（可能再次调用工具，或生成最终回复）
+          if (round < MAX_TOOL_ROUNDS) {
+            send("status", { stage: `tool_round_${round + 1}` });
+            try { resp = await chatCompletion(env, currentMessages, TOOLS); } catch (err) { if (String(err).toLowerCase().includes("rate limited")) { send("output", { type: "assistant", message: { content: [{ type: "text", text: "所有 API key 均已限流，请稍后再试。" }] } }); send("done", { status: "completed" }); close(); return; } throw err; }
+            continue;
+          }
+        } else if (choice.message.content) {
+          send("output", { type: "assistant", message: { content: [{ type: "text", text: choice.message.content }] } });
+        }
+        break; // 没有 tool_calls，退出循环
+      }
       send("done", { status: "completed" }); close();
     } catch (err) { console.error("chat handler error:", err); send("error", { error: String(err) }); close(); }
   })();

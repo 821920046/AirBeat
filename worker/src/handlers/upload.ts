@@ -32,14 +32,16 @@ export async function handleUpload(request: Request, env: Env): Promise<Response
       return errorResponse("file is required", 400);
     }
 
+    const ext = file.name.split(".").pop()?.toLowerCase() || "mp3";
     const ts = Date.now();
     const safeTitle = sanitizeFilename(title);
-    const r2Key = `audio/${ts}_${safeTitle}.mp3`;
+    const r2Key = `audio/${ts}_${safeTitle}.${ext}`;
 
-    // 上传到 R2
+    // 上传到 R2 — Content-Type 根据实际文件格式确定
     const arrayBuffer = await file.arrayBuffer();
+    const contentType = file.type || (ext === "wav" ? "audio/wav" : ext === "m4a" ? "audio/mp4" : "audio/mpeg");
     await env.AUDIO_BUCKET.put(r2Key, arrayBuffer, {
-      httpMetadata: { contentType: "audio/mpeg" },
+      httpMetadata: { contentType },
     });
 
     // 写入 D1

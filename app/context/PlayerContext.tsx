@@ -40,6 +40,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const playlistRef = useRef<Track[]>([]);
   const indexRef = useRef(-1);
   const playTrackInternalRef = useRef<(track: Track) => void>(() => {});
+  // 防止并发添加同一首歌（搜索结果的 id=bvid，数据库的 id=数字id，bvid字段保持一致）
+  const inFlightRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     playlistRef.current = playlist;
@@ -82,11 +84,13 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const addTracks = useCallback((tracks: Track[]) => {
     if (!tracks.length) return;
 
+    // 去重：用 inFlightRef 防并发竞态 + seen set 防已存在
+    const inflight = inFlightRef.current;
     const seen = new Set(playlistRef.current.flatMap(trackKeys));
     const fresh = tracks.filter((track) => {
       const keys = trackKeys(track);
-      if (keys.some((key) => seen.has(key))) return false;
-      keys.forEach((key) => seen.add(key));
+      if (keys.some((key) => inflight.has(key) || seen.has(key))) return false;
+      keys.forEach((key) => { seen.add(key); inflight.add(key); });
       return true;
     });
     if (!fresh.length) return;

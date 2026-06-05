@@ -54,8 +54,9 @@ export async function handleAudio(request: Request, env: Env): Promise<Response>
     const object = await env.AUDIO_BUCKET.get(r2Key);
     if (!object) return errorResponse("Not found", 404);
 
+    const contentType = object.httpMetadata?.contentType || "audio/mp4";
     const headers = new Headers(CORS_HEADERS);
-    headers.set("Content-Type", "audio/mpeg");
+    headers.set("Content-Type", contentType);
     headers.set("Accept-Ranges", "bytes");
     headers.set("Content-Length", String(object.size));
 

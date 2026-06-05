@@ -50,6 +50,8 @@ function directSearchKeyword(input: string): string | null {
 
   const hasMusicIntent = MUSIC_INTENT_RE.test(trimmed);
   if (!hasMusicIntent && QUESTION_RE.test(trimmed)) return null;
+  // 启发式规则：无音乐意图词且不是问句的短输入(<24字符)当作搜索关键词（如"周杰伦""G.E.M."），
+  // 长输入（≥24字符）当作自然语言问题路由给 AI 推理（避免把"我今天心情不好想放松一下"当搜索词）
   if (!hasMusicIntent && trimmed.length > 24) return null;
 
   const keyword = hasMusicIntent ? cleanSearchKeyword(trimmed) : trimmed;

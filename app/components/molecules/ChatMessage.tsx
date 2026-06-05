@@ -36,26 +36,33 @@ function tryParseTrackArray(raw: string): Track[] | null {
 
 const OBJ_RE = /\{([^}]*)\}/g;
 
+/** 从非标准 JSON 字符串中尽力提取 Track 对象（正则兜底，处理 LLM 格式偏差） */
 function tryExtractTracksFromRaw(raw: string): Track[] | null {
   const tracks: Track[] = [];
   OBJ_RE.lastIndex = 0;
   let m: RegExpExecArray | null;
   while ((m = OBJ_RE.exec(raw)) !== null) {
     const obj = m[1];
+    // 宽松匹配：逐个字段提取，不依赖字段顺序
     const bvid = obj.match(/"bvid"\s*:\s*"([^"]+)"/)?.[1];
     const id = obj.match(/"id"\s*:\s*"([^"]+)"/)?.[1];
     const title = obj.match(/"title"\s*:\s*"([\s\S]+?)"\s*,\s*"(?:author|duration|url|bvid|id)"/)?.[1];
+    // 后备：如果逗号分隔匹配失败，尝试直接匹配（LLM 可能用不同字段顺序）
+    const titleAlt = !title ? obj.match(/"title"\s*:\s*"([^"]+)"/)?.[1] : null;
     const author = obj.match(/"author"\s*:\s*"([\s\S]+?)"\s*,\s*"(?:duration|url|bvid)"/)?.[1];
+    const authorAlt = !author ? obj.match(/"author"\s*:\s*"([^"]+)"/)?.[1] : null;
     const duration = obj.match(/"duration"\s*:\s*"([^"]+)"/)?.[1];
     const url = obj.match(/"url"\s*:\s*"([^"]+)"/)?.[1];
 
+    const finalTitle = title ?? titleAlt;
+    const finalAuthor = author ?? authorAlt;
     const trackId = bvid || id;
-    if (trackId && title) {
+    if (trackId && finalTitle) {
       tracks.push({
         id: trackId,
         ...(bvid ? { bvid } : {}),
-        title,
-        author: author ?? "",
+        title: finalTitle,
+        author: finalAuthor ?? "",
         ...(duration ? { duration } : {}),
         url: url ?? "",
         date: "",
@@ -330,7 +337,7 @@ function TrackCards({ tracks }: { tracks: TrackExt[] }) {
                 {btnState === "converting" && (
                   <div className="mt-1.5">
                     <div className="flex items-center justify-between text-[10px] opacity-60" style={{ fontFamily: "var(--font-headline)" }}>
-                      <span>{stage === "downloading" ? "DOWNLOADING" : stage === "decoding" ? "DECODING" : stage === "encoding" ? "ENCODING" : stage === "uploading" ? "UPLOADING" : "PROCESSING"}</span>
+                      <span>{stage === "downloading" ? "DOWNLOADING" : stage === "uploading" ? "UPLOADING" : "PROCESSING"}</span>
                       <span>{progress ?? 0}%</span>
                     </div>
                     <div className="mt-0.5 h-1 w-full rounded-full" style={{ backgroundColor: "var(--color-surface-container-high)" }}>

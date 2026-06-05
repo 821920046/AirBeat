@@ -191,6 +191,9 @@ export async function handleChat(request: Request, env: Env): Promise<Response> 
         return;
       }
 
+      // 多轮 tool_call 循环 — 最多 3 轮
+      const MAX_TOOL_ROUNDS = 3;
+      for (let round = 1; round <= MAX_TOOL_ROUNDS; round++) {
       const choice = response.choices?.[0];
       if (!choice?.message) {
         send("error", { error: "No response from model" });
@@ -231,52 +234,43 @@ export async function handleChat(request: Request, env: Env): Promise<Response> 
           });
         }
 
-        // 第二轮调用（带工具结果）
-        const followUpMessages = [
-          ...messages,
-          {
-            role: "assistant" as const,
-            content: choice.message.content || "",
-            tool_calls: choice.message.tool_calls,
-          },
-          ...toolMessages,
-        ];
+        messages.push({
+          role: "assistant" as const,
+          content: choice.message.content || "",
+          tool_calls: choice.message.tool_calls,
+        });
+        messages.push(...toolMessages);
 
-        let secondResponse;
-        try {
-          secondResponse = await chatCompletion(env, followUpMessages);
-        } catch (err) {
-          if (String(err).includes("RATE_LIMITED")) {
-            send("output", {
-              type: "assistant",
-              message: {
-                content: [{ type: "text", text: "请求频率受限，请稍后再试。" }],
-              },
-            });
-            send("done", { status: "completed" });
-            close();
-            return;
+        // 继续下一轮
+        if (round < MAX_TOOL_ROUNDS) {
+          try {
+            response = await chatCompletion(env, messages, TOOLS);
+          } catch (err) {
+            if (String(err).includes("RATE_LIMITED")) {
+              send("output", {
+                type: "assistant",
+                message: {
+                  content: [{ type: "text", text: "请求频率受限，请稍后再试。" }],
+                },
+              });
+              send("done", { status: "completed" });
+              close();
+              return;
+            }
+            throw err;
           }
-          throw err;
-        }
-
-        const secondChoice = secondResponse.choices?.[0];
-        if (secondChoice?.message?.content) {
-          send("output", {
-            type: "assistant",
-            message: {
-              content: [{ type: "text", text: secondChoice.message.content }],
-            },
-          });
+          continue;
         }
       } else if (choice.message.content) {
-        // 纯文本响应，无需工具调用
+        // 纯文本响应
         send("output", {
           type: "assistant",
           message: {
             content: [{ type: "text", text: choice.message.content }],
           },
         });
+      }
+      break; // 无 tool_calls，退出
       }
 
       send("done", { status: "completed" });

@@ -19,6 +19,11 @@ export function StatusBar() {
             SYSTEM_ONLINE
           </Label>
         </span>
+        {/*
+          以下 MEM/CPU/PACKET_LOSS/SYNC_STATUS 是复古终端美学的装饰数据，
+          并非真实系统指标。浏览器端无法获取真实的系统资源信息。
+          保留它们只是为了保持 terminal UI 的氛围感。
+        */}
         <Label size="sm" className="text-[color:var(--color-outline)]">
           MEM: 12.4GB / 32GB
         </Label>

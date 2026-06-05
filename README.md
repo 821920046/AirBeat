@@ -2,7 +2,7 @@
   <img src="public/airbeat_logo.png" alt="AirBeat" width="200" />
 </p>
 
-[![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
+[![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC%20BY--NC-SA%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
 
 AI 驱动的智能音乐播放器。随时随地，免费听歌。
 
@@ -13,10 +13,12 @@ AI 驱动的智能音乐播放器。随时随地，免费听歌。
 ## Features
 
 - **AI 对话交互** — 通过自然语言告诉 AI 你想听什么，智能搜索推荐
-- **B站海量曲库** — 搜索 B站任意视频，一键转为音频
-- **浏览器端转换** — 基于 Web Audio API，无需服务器，浏览器内完成 AAC→WAV 转换
-- **弹幕叠加** — 播放 B站来源的音频时，同步显示原视频弹幕
-- **复古终端 UI** — 赛博朋克风格界面，实时状态面板
+- **B站海量曲库** — 搜索 B站任意视频，一键下载音频
+- **原始音频直传** — 浏览器下载 B站 DASH AAC/M4A 音频流，直接上传 R2 存储，不做客户端转码，节省 CPU 和内存
+- **弹幕叠加** — 播放 B站来源的音频时，同步显示原视频弹幕（JS 驱动匀速滚动）
+- **SSE 流式 + 断线重连** — AI 对话实时流式输出，网络断开自动重连
+- **多轮 Tool Calling** — AI 可连续调用多次搜索工具，扩展搜索范围
+- **复古终端 UI** — 赛博朋克风格界面，CRT 扫描线、点阵背景、实时状态面板
 - **全平台免费部署** — 基于 Cloudflare 免费服务，零成本运行
 
 ## Tech Stack
@@ -24,11 +26,11 @@ AI 驱动的智能音乐播放器。随时随地，免费听歌。
 | 层 | 技术 |
 |---|------|
 | 前端 | Next.js 16 (Static Export) / React 19 / TypeScript 5 |
-| 样式 | Tailwind CSS 4 + CSS Variables |
+| 样式 | Tailwind CSS 4 + CSS Variables + Material Symbols |
 | 后端 | Cloudflare Pages Functions |
 | 存储 | Cloudflare R2 (音频) + D1 (元数据) + KV (缓存) |
-| AI | OpenRouter 免费模型 (function calling) |
-| 转换 | Web Audio API (浏览器端 AAC→WAV) |
+| AI | OpenRouter 免费模型 (function calling, key pool + 模型降级) |
+| 音频 | B站 DASH 流 (AAC-in-MP4 容器)，浏览器原生 `<audio>` 播放 |
 
 ## Getting Started
 
@@ -128,37 +130,30 @@ npx wrangler pages deploy
 AirBeat/
 ├── app/                     # Next.js 前端（静态导出）
 │   ├── components/          # UI 组件（Atomic Design）
-│   │   ├── atoms/
-│   │   ├── molecules/
-│   │   └── organisms/
-│   ├── context/             # React Context
-│   │   ├── PlayerContext    # 音频播放状态
-│   │   ├── AgentContext     # AI 对话状态
-│   │   ├── ConvertContext   # Web Audio API 转换状态
-│   │   └── DanmakuContext   # 弹幕状态
-│   ├── hooks/               # 自定义 Hooks
-│   └── lib/                 # 类型定义 & 配置
+│   │   ├── atoms/           # DanmakuOverlay, GlowDot, Badge 等基础组件
+│   │   ├── molecules/       # ControlBar, SeekBar, TrackInfo, ChatMessage 等
+│   │   └── organisms/       # Player, AgentChat, Playlist, ClockPanel 等
+│   ├── context/             # React Context 状态管理
+│   │   ├── PlayerContext    # 音频播放状态 + 播放列表操作
+│   │   ├── AgentContext     # AI 对话状态 + 本地意图检测
+│   │   ├── ConvertContext   # B站 DASH 音频下载 → 上传 R2 转换流程
+│   │   └── DanmakuContext   # 弹幕数据获取 & 开关
+│   ├── hooks/               # useAudioPlayer, useSSE, useClock
+│   └── lib/                 # B站 API 客户端、类型定义、配置
 ├── functions/               # Cloudflare Pages Functions（API 后端）
-│   ├── _middleware.ts        # 全局 CORS 中间件
+│   ├── _middleware.ts        # 全局 CORS
 │   ├── api/
-│   │   ├── bili/            # B站相关 API
-│   │   │   ├── search.ts    # GET /api/bili/search
-│   │   │   ├── danmaku.ts   # GET /api/bili/danmaku
-│   │   │   ├── audio-url.ts # GET /api/bili/audio-url
-│   │   │   └── proxy.ts     # GET /api/bili/proxy
-│   │   ├── chat.ts          # POST /api/chat（AI 对话 SSE）
-│   │   ├── tracks.ts        # GET /api/tracks
-│   │   └── upload.ts        # POST /api/upload
+│   │   ├── bili/            # B站 API 代理（search + 媒体流代理）
+│   │   ├── chat.ts          # AI 对话 SSE (key pool, 模型降级, 多轮 tool_call)
+│   │   ├── tracks.ts        # 本地曲库搜索
+│   │   ├── upload.ts        # 音频上传 (R2 + D1)
+│   │   └── keys.ts          # API key 池管理
 │   └── audio/
-│       └── [[path]].ts      # GET /audio/*（R2 音频流）
-├── worker/                  # Worker 源码（本地开发用）
-│   ├── src/
-│   ├── schema.sql           # D1 建表语句
-│   └── wrangler.toml
-├── wrangler.toml            # Pages 项目配置（D1/KV/R2 绑定）
-├── docs/screenshots/        # 应用截图
-├── public/                  # 静态资源
-└── design/                  # 设计规范文档
+│       └── [[path]].ts      # R2 音频流（支持 Range 请求）
+├── worker/                  # 独立 Worker 源码（本地开发/备用）
+├── wrangler.toml            # Cloudflare Pages 配置（D1/KV/R2 绑定）
+├── design/                  # 设计规范文档
+└── docs/screenshots/        # 应用截图
 ```
 
 ## Architecture
@@ -166,22 +161,24 @@ AirBeat/
 ```
 浏览器 ──→ Cloudflare Pages
             ├── 静态文件（Next.js 导出的 HTML/CSS/JS）
-            └── Functions（API 后端）
-                 ├── /api/bili/*  → 调用 B站 API（WBI 签名）
-                 ├── /api/chat   → OpenRouter AI 对话（SSE）
-                 ├── /api/tracks → D1 数据库查询
-                 ├── /api/upload → R2 音频上传 + D1 写入
-                 └── /audio/*    → R2 音频流式播放
+            ├── Functions（API 后端）
+            │    ├── /api/bili/*  → B站 API（前端直连外部代理，绕过 CF IP 封锁）
+            │    ├── /api/chat   → OpenRouter AI 对话 SSE
+            │    ├── /api/tracks → D1 数据库查询
+            │    ├── /api/upload → R2 音频上传 + D1 写入
+            │    └── /audio/*    → R2 音频流（Range + 正确 Content-Type）
+            ├── D1 Database     → tracks 表（id, title, author, bvid, r2_key, ...）
+            ├── R2 Bucket       → 音频文件（AAC/M4A, 少量遗留 WAV）
+            └── KV Namespace    → WBI keys, buvid3, API key pool 缓存
 ```
-
-前端和 API 部署在同一个 Cloudflare Pages 项目，共享同一域名，无需跨域配置。
 
 ## Usage
 
 1. 在聊天框输入你想听的内容（如"听周杰伦的晴天"）
-2. AI 在 B站搜索并推荐相关结果
-3. 点击 + ADD 按钮，浏览器自动下载、转换、上传音频
-4. 转换完成后自动加入播放列表，即刻播放
+2. AI 在 B站搜索并推荐相关结果，或直接 `/search 关键词` 快速搜索
+3. 点击 **+ ADD** 按钮，浏览器下载 B站 DASH 原始音频 → 直接上传 R2
+4. 音频加入播放列表自动播放，支持上一首/下一首/暂停/进度拖拽/音量调节
+5. 点击弹幕开关可显示/隐藏同步弹幕
 
 ## Platform
 
@@ -189,10 +186,27 @@ AirBeat/
 |------|---------|
 | macOS | 完全支持 |
 | Linux | 完全支持 |
-| Windows | 完全支持（浏览器端转换，无 WSL 依赖） |
+| Windows | 完全支持 |
+| Mobile (iOS/Android) | 支持（不做客户端转码，内存安全） |
+
+## Key Dependencies
+
+| 库 | 用途 |
+|---|------|
+| Next.js 16 | 前端框架（静态导出） |
+| React 19 | UI 框架 |
+| Tailwind CSS 4 | 样式系统 |
+| ts-md5 | B站 WBI 签名 |
+| wrangler | Cloudflare 部署 CLI |
+
+## Author
+
+**Windwalker** — 独立开发者，自媒体 & 电商创业者
+
+GitHub: [@821920046](https://github.com/821920046)
 
 ## License
 
 本项目采用 [CC BY-NC-SA 4.0](LICENSE) 协议。
 
-你可以自由地查看、修改和分享本项目代码，但 **禁止用于商业用途**。 衍生作品须以相同协议分发。
+你可以自由地查看、修改和分享本项目代码，但 **禁止用于商业用途**。衍生作品须以相同协议分发。

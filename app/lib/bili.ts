@@ -12,8 +12,13 @@ const MIXIN_KEY_ENC_TAB = [
   62,11,36,20,34,44,52,
 ] as const;
 
-// B站 API 通过代理转发（B站封了 Cloudflare IP，需从浏览器发起）
-const PROXY_BASE = "https://bili-proxy-teal.vercel.app/api";
+// B站 API 通过外部代理转发
+// 原因：B站封锁 Cloudflare 数据中心 IP（HTTP 412），本项目 Pages Functions 跑在 CF 上会被拦截
+// 所以搜索等 API 调用需要通过非 CF 的外部代理（默认的 Vercel 代理 bili-proxy-teal）
+// 可通过环境变量 NEXT_PUBLIC_BILI_PROXY 自定义代理地址
+const PROXY_BASE =
+  (typeof process !== "undefined" && process.env?.NEXT_PUBLIC_BILI_PROXY) ||
+  "https://bili-proxy-teal.vercel.app/api";
 const BILI_API = PROXY_BASE;
 
 // --- localStorage 缓存（替代 Cloudflare KV） ---
@@ -159,7 +164,7 @@ export async function getAudioUrl(bvid: string, cid: string): Promise<string> {
   return audio!.baseUrl || audio!.base_url || "";
 }
 
-/** 通过代理下载音频 */
+/** 通过代理下载 B站 DASH 音频的原始 AAC/M4A 字节（不解码，直接返回 ArrayBuffer） */
 export async function fetchAudioBuffer(audioUrl: string): Promise<ArrayBuffer> {
   const res = await fetch(`/api/bili/proxy?url=${encodeURIComponent(audioUrl)}`);
   if (!res.ok) throw new Error(`音频下载失败: ${res.status}`);

@@ -13,40 +13,50 @@ function fmtSec(s: number): string {
   return `${m}:${sec.toString().padStart(2, "0")}`;
 }
 
+/** 限制同时加载 meta 的 Audio 对象数，避免大量 track 时内存浪费 */
+const MAX_CONCURRENT = 2;
+
 function useDurationMap(tracks: Track[]) {
   const [map, setMap] = useState<Record<string, number>>({});
   const pending = useRef(new Set<string>());
+  const queueRef = useRef<Track[]>([]);
+  const activeCountRef = useRef(0);
+
+  // 处理队列中的下一个 track
+  const processNext = () => {
+    if (activeCountRef.current >= MAX_CONCURRENT) return;
+    const t = queueRef.current.shift();
+    if (!t) return;
+
+    activeCountRef.current++;
+    pending.current.add(t.id);
+    const id = t.id;
+
+    const audio = new Audio();
+    audio.preload = "metadata";
+    const finish = (dur: number | undefined) => {
+      if (Number.isFinite(dur) && (dur ?? 0) > 0) {
+        setMap((prev) => ({ ...prev, [id]: dur! }));
+      }
+      pending.current.delete(id);
+      audio.src = "";
+      activeCountRef.current--;
+      processNext(); // 处理下一个
+    };
+    audio.addEventListener("loadedmetadata", () => finish(audio.duration), { once: true });
+    audio.addEventListener("error", () => finish(undefined), { once: true });
+    audio.src = apiUrl(t.url);
+  };
 
   useEffect(() => {
-    for (const t of tracks) {
-      if (!t.url || map[t.id] != null || pending.current.has(t.id)) continue;
-      pending.current.add(t.id);
-
-      const audio = new Audio();
-      audio.preload = "metadata";
-      const id = t.id;
-      audio.addEventListener(
-        "loadedmetadata",
-        () => {
-          const dur = audio.duration;
-          if (Number.isFinite(dur) && dur > 0) {
-            setMap((prev) => ({ ...prev, [id]: dur }));
-          }
-          pending.current.delete(id);
-          audio.src = "";
-        },
-        { once: true }
-      );
-      audio.addEventListener(
-        "error",
-        () => {
-          pending.current.delete(id);
-          audio.src = "";
-        },
-        { once: true }
-      );
-      audio.src = apiUrl(t.url);
-    }
+    // 把未处理且未在队列/pending 中的 track 加入队列
+    const toQueue = tracks.filter(
+      (t) => t.url && map[t.id] == null && !pending.current.has(t.id) && !queueRef.current.includes(t)
+    );
+    if (!toQueue.length) return;
+    queueRef.current.push(...toQueue);
+    // 尝试启动
+    while (activeCountRef.current < MAX_CONCURRENT) processNext();
   }, [tracks, map]);
 
   return map;
