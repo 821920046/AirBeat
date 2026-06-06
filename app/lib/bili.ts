@@ -12,14 +12,9 @@ const MIXIN_KEY_ENC_TAB = [
   62,11,36,20,34,44,52,
 ] as const;
 
-// B站 API 通过外部代理转发
-// 原因：B站封锁 Cloudflare 数据中心 IP（HTTP 412），本项目 Pages Functions 跑在 CF 上会被拦截
-// 所以搜索等 API 调用需要通过非 CF 的外部代理（默认的 Vercel 代理 bili-proxy-teal）
-// 可通过环境变量 NEXT_PUBLIC_BILI_PROXY 自定义代理地址
-const PROXY_BASE =
-  (typeof process !== "undefined" && process.env?.NEXT_PUBLIC_BILI_PROXY) ||
-  "https://bili-proxy-teal.vercel.app/api";
-const BILI_API = PROXY_BASE;
+// B站 API 通过自己的 Cloudflare Pages Function 代理
+// 走 /api/bili/* catch-all，内带 buvid3 cookie + 浏览器 UA 绕过 B站 412
+const BILI_API = "/api/bili";
 
 // --- localStorage 缓存（替代 Cloudflare KV） ---
 function getCached<T>(key: string): T | null {
