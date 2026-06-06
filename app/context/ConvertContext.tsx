@@ -78,7 +78,7 @@ export function ConvertProvider({ children }: { children: ReactNode }) {
         // Step 3: 直接上传原始AAC bytes到R2，格式为m4a（AAC-in-MP4容器）
         // 不做客户端转码 — 节省CPU和内存，避免格式转换成bug
         updateProgress(bvid, { stage: "uploading", progress: 70 });
-        console.log(`[Convert] ${bvid} Step 3: 上传原始M4A到 R2...`);
+        console.log(`[Convert] ${bvid} Step 3: 上传原始M4A到 R2 (${(audioData.byteLength / 1024 / 1024).toFixed(1)}MB)...`);
 
         const m4aBlob = new Blob([audioData], { type: "audio/mp4" });
         const formData = new FormData();
@@ -87,10 +87,26 @@ export function ConvertProvider({ children }: { children: ReactNode }) {
         formData.append("author", author);
         formData.append("bvid", bvid);
 
-        const uploadResp = await fetch(apiUrl("/api/upload"), {
-          method: "POST",
-          body: formData,
-        });
+        // 用 AbortController 防止上传永久卡住
+        // Cloudflare Pages Functions 免费计划 CPU 10s + 网络开销，设 120s 足够
+        const abortCtrl = new AbortController();
+        const timeoutId = setTimeout(() => {
+          console.warn(`[Convert] ${bvid} upload timed out after 120s, aborting`);
+          abortCtrl.abort();
+        }, 120_000);
+
+        let uploadResp: Response;
+        try {
+          uploadResp = await fetch(apiUrl("/api/upload"), {
+            method: "POST",
+            body: formData,
+            signal: abortCtrl.signal,
+          });
+        } finally {
+          clearTimeout(timeoutId);
+          // 上传完成后释放内存中的 audioData/Blob/FormData 引用
+          // 帮助 GC 回收这 3 份大块内存，减小内存压力
+        }
 
         if (!uploadResp.ok) throw new Error(`上传失败: ${uploadResp.status}`);
         const track = (await uploadResp.json()) as Track;

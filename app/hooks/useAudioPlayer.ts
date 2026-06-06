@@ -15,6 +15,7 @@ export function useAudioPlayer(options?: { onEnded?: () => void }) {
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolumeState] = useState(0.8);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const el = audioRef.current;
@@ -41,6 +42,31 @@ export function useAudioPlayer(options?: { onEnded?: () => void }) {
     el.addEventListener("ended", syncEnded);
     el.addEventListener("volumechange", syncVol);
 
+    // 捕获原生音频错误（格式不支持、网络错误、CORS 等）
+    const handleError = () => {
+      const el = audioRef.current;
+      const code = el?.error?.code;
+      const message = el?.error?.message ||
+        (code === 1 ? "播放被中断" :
+         code === 2 ? "网络错误，无法加载音频" :
+         code === 3 ? "解码失败，音频格式可能不支持" :
+         code === 4 ? "音频资源未找到或格式无效" :
+         `音频播放错误 (code: ${code})`);
+      console.error("[Audio] error event fired, code:", code, "message:", el?.error?.message, "src:", el?.currentSrc || el?.src);
+      setError(message);
+      setPlaying(false);
+    };
+    el.addEventListener("error", handleError);
+
+    // 捕获 stalled 事件 — 网络断流
+    const handleStalled = (e: Event) => {
+      // 只在还没开始播放时记录（播放中遇到 stalled 浏览器会自动重试）
+      if ((e.target as HTMLAudioElement).readyState < HTMLMediaElement.HAVE_FUTURE_DATA) {
+        console.warn("[Audio] stalled (buffering), readyState:", (e.target as HTMLAudioElement).readyState);
+      }
+    };
+    el.addEventListener("stalled", handleStalled);
+
     setVolumeState(el.volume);
     syncDuration();
     syncProgress();
@@ -54,6 +80,8 @@ export function useAudioPlayer(options?: { onEnded?: () => void }) {
       el.removeEventListener("pause", syncPauseFlags);
       el.removeEventListener("ended", syncEnded);
       el.removeEventListener("volumechange", syncVol);
+      el.removeEventListener("error", handleError);
+      el.removeEventListener("stalled", handleStalled);
     };
   }, []);
 
@@ -65,9 +93,18 @@ export function useAudioPlayer(options?: { onEnded?: () => void }) {
     const el = audioRef.current;
     if (!el) return;
     try {
+      setError(null);
       await el.play();
     } catch (err) {
-      console.error("Audio play failed:", err, "src:", el.currentSrc || el.src || "(empty)");
+      const msg = String(err);
+      console.error("Audio play failed:", msg, "src:", el.currentSrc || el.src || "(empty)");
+      // 浏览器中断 play() 时会抛出 DOMException，一般是用户未交互
+      // 真正加载错误会走 error 事件，不在这里设 error
+      if (err instanceof DOMException && (err as DOMException).name === "NotAllowedError") {
+        setError("请先点击页面任意位置，浏览器要求用户交互后才能播放音频");
+      } else if (msg.includes("NotSupportedError") || msg.includes("MEDIA_ERR_SRC_NOT_SUPPORTED")) {
+        setError("浏览器不支持此音频格式，尝试重新下载");
+      }
     }
   }, []);
 
@@ -98,6 +135,7 @@ export function useAudioPlayer(options?: { onEnded?: () => void }) {
   const playTrack = useCallback((track: Track) => {
     const el = audioRef.current;
     if (!el || !track.url) return;
+    setError(null);
     const src = apiUrl(track.url);
     el.src = src;
     el.load();
@@ -108,12 +146,16 @@ export function useAudioPlayer(options?: { onEnded?: () => void }) {
     });
   }, []);
 
+  const clearError = useCallback(() => setError(null), []);
+
   return {
     audioRef,
     playing,
     progress,
     duration,
     volume,
+    error,
+    clearError,
     play,
     pause,
     toggle,

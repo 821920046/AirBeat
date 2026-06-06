@@ -24,6 +24,8 @@ type PlayerCtx = {
   seek: (n: number) => void;
   setVolume: (n: number) => void;
   stop: () => void;
+  error: string | null;
+  clearError: () => void;
   audioRef: React.RefObject<HTMLAudioElement | null>;
 };
 
@@ -67,6 +69,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     progress,
     duration,
     volume,
+    error,
+    clearError,
     toggle,
     seek,
     setVolume,
@@ -251,9 +255,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       seek,
       setVolume,
       stop,
+      error,
+      clearError,
       audioRef,
     }),
-    [state, playTrackWrapped, addTracks, removeTrack, next, prev, togglePlayWrapped, seek, setVolume, stop, audioRef]
+    [state, playTrackWrapped, addTracks, removeTrack, next, prev, togglePlayWrapped, seek, setVolume, stop, error, clearError, audioRef]
   );
 
   return (

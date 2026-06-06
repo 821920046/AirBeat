@@ -24,7 +24,7 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: E
     const ext = file.name.split(".").pop()?.toLowerCase() || "mp3";
     const r2Key = `audio/${Date.now()}_${sanitizeFilename(title)}.${ext}`;
     const arrayBuffer = await file.arrayBuffer();
-    const contentType = file.type || (ext === "wav" ? "audio/wav" : "audio/mpeg");
+    const contentType = file.type || (ext === "wav" ? "audio/wav" : ext === "m4a" || ext === "mp4" ? "audio/mp4" : "audio/mpeg");
     await env.AUDIO_BUCKET.put(r2Key, arrayBuffer, { httpMetadata: { contentType } });
     return jr(await insertTrack(env, { title, author, bvid, r2_key: r2Key, file_size: arrayBuffer.byteLength }));
   } catch (err) { console.error("upload error:", err); return er(String(err), 500); }

@@ -8,7 +8,7 @@ import { VolumeControl } from "@/app/components/molecules/VolumeControl";
 import { usePlayer } from "@/app/context/PlayerContext";
 
 export function Player() {
-  const { state, next, prev, togglePlay, stop, seek, setVolume } = usePlayer();
+  const { state, error, clearError, next, prev, togglePlay, stop, seek, setVolume } = usePlayer();
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -32,6 +32,25 @@ export function Player() {
       }}
     >
       <TrackInfo track={state.current} playing={state.playing} />
+      {error && (
+        <div
+          className="flex items-center justify-between rounded-sm border px-3 py-2 text-xs"
+          style={{
+            borderColor: "var(--color-error)",
+            backgroundColor: "color-mix(in srgb, var(--color-error) 12%, transparent)",
+            color: "var(--color-error)",
+          }}
+        >
+          <span className="truncate">⚠ {error}</span>
+          <button
+            onClick={() => { clearError(); }}
+            className="ml-2 shrink-0 rounded-sm border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] transition-opacity hover:opacity-80"
+            style={{ borderColor: "var(--color-error)", color: "var(--color-error)" }}
+          >
+            关闭
+          </button>
+        </div>
+      )}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <ControlBar
           playing={state.playing}
