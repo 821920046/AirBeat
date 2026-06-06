@@ -101,6 +101,12 @@ export function ConvertProvider({ children }: { children: ReactNode }) {
     async (trackId: string, source: MusicSource, title: string, artist: string): Promise<Track> => {
       const key = `${source}:${trackId}`;
 
+      // 本地曲库的 track 不需要转换 — 不应该走到这里
+      if (!source || !["netease", "youtube", "bilibili"].includes(source)) {
+        console.warn(`[Convert] ${key} refused: unsupported source`);
+        throw new Error(`不支持的音乐来源: ${source}`);
+      }
+
       // Clear previous error
       setErrors((prev) => {
         const next = new Map(prev);

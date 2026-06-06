@@ -155,14 +155,20 @@ function AddedCards({ tracks }: { tracks: TrackExt[] }) {
   const { fetchDanmaku } = useDanmaku();
   const didAutoAdd = useRef(false);
 
+  // 本地曲目判断：URL以/audio/开头，或source不是三个在线源
+  const isLocalTrack = (t: TrackExt) =>
+    t.url?.startsWith("/audio/") ||
+    (!!t.source && !["netease", "youtube", "bilibili"].includes(t.source));
+
   // URL 以 /audio/ 开头 → R2 已上传，可直接播放
+  // source 不是在线源 → 本地结果，直接加入
   // 其他 → 需要走转换流程
   useEffect(() => {
     if (didAutoAdd.current || tracks.length === 0) return;
     didAutoAdd.current = true;
 
-    const readyTracks = tracks.filter((t) => t.url?.startsWith("/audio/"));
-    const needConvert = tracks.filter((t) => !t.url?.startsWith("/audio/"));
+    const readyTracks = tracks.filter((t) => isLocalTrack(t));
+    const needConvert = tracks.filter((t) => !isLocalTrack(t));
 
     if (readyTracks.length > 0) addTracks(readyTracks);
 
@@ -175,7 +181,7 @@ function AddedCards({ tracks }: { tracks: TrackExt[] }) {
         fetchDanmaku(track.bvid);
       }
 
-      convertTrack(trackId, trackSource, track.title, artist)
+      convertTrack(trackId, trackSource as any, track.title, artist)
         .then((converted) => addTracks([converted]))
         .catch((err) => console.error("[AddedCards] convert failed:", err));
     }
