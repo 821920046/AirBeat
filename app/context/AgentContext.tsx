@@ -2,7 +2,6 @@
 
 import type { AgentState, ChatMessage } from "@/app/lib/types";
 import { apiUrl } from "@/app/lib/config";
-import { searchVideos } from "@/app/lib/bili";
 import { useSSE } from "@/app/hooks/useSSE";
 import {
   createContext,
@@ -21,41 +20,9 @@ type AgentCtxValue = AgentState & {
 
 const AgentContext = createContext<AgentCtxValue | null>(null);
 
-const SEARCH_COMMAND_RE = /^\/search\s+(.+)/i;
-const QUESTION_RE = /[?？]$|^(?:为什么|怎么|如何|什么是|介绍|解释|聊聊)/;
-const MUSIC_INTENT_RE = /(?:搜索|搜|查找|找|想听|听歌|播放|点播|来一首|来点|推荐|歌曲|音乐|歌)/i;
-
 function newId() {
   if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
   return `m-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-}
-
-function cleanSearchKeyword(text: string): string {
-  return text
-    .replace(SEARCH_COMMAND_RE, "$1")
-    .replace(/^(?:请|帮我|给我|我想|我要)?(?:搜索|搜一下|搜|查找|找|播放|点播|想听|听|来一首|来点|推荐)(?:一下)?/i, "")
-    .replace(/(?:B站|b站|视频|歌曲|音乐|的歌|歌|几首|一些|一下)/g, " ")
-    .replace(/[，。！？?：:、]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function directSearchKeyword(input: string): string | null {
-  const trimmed = input.trim();
-  if (!trimmed) return null;
-  if (/^\/(?!search\b)/i.test(trimmed)) return null;
-
-  const command = trimmed.match(SEARCH_COMMAND_RE);
-  if (command?.[1]?.trim()) return command[1].trim();
-
-  const hasMusicIntent = MUSIC_INTENT_RE.test(trimmed);
-  if (!hasMusicIntent && QUESTION_RE.test(trimmed)) return null;
-  // 启发式规则：无音乐意图词且不是问句的短输入(<24字符)当作搜索关键词（如"周杰伦""G.E.M."），
-  // 长输入（≥24字符）当作自然语言问题路由给 AI 推理（避免把"我今天心情不好想放松一下"当搜索词）
-  if (!hasMusicIntent && trimmed.length > 24) return null;
-
-  const keyword = hasMusicIntent ? cleanSearchKeyword(trimmed) : trimmed;
-  return keyword.length > 0 ? keyword : null;
 }
 
 function appendFromSdkPayload(
@@ -192,55 +159,6 @@ export function AgentProvider({
     sseCancel();
   }, [sseCancel]);
 
-  const runDirectSearch = useCallback(async (keyword: string) => {
-    try {
-      const result = await searchVideos(keyword);
-      if (result.videos.length) {
-        const tracks = result.videos.map((v) => ({
-          id: v.bvid,
-          bvid: v.bvid,
-          title: v.title,
-          author: v.author,
-          duration: v.duration,
-          url: "",
-          date: "",
-          filename: "",
-          subDir: "",
-          size: 0,
-        }));
-        setMessages((m) => [
-          ...m,
-          {
-            id: newId(),
-            role: "agent" as const,
-            content: "```tracks\n" + JSON.stringify(tracks) + "\n```",
-            timestamp: Date.now(),
-          },
-        ]);
-      } else {
-        setMessages((m) => [
-          ...m,
-          {
-            id: newId(),
-            role: "system" as const,
-            content: `未找到「${keyword}」的相关结果`,
-            timestamp: Date.now(),
-          },
-        ]);
-      }
-    } catch (err) {
-      setMessages((m) => [
-        ...m,
-        {
-          id: newId(),
-          role: "system" as const,
-          content: `搜索失败: ${String(err)}`,
-          timestamp: Date.now(),
-        },
-      ]);
-    }
-  }, []);
-
   const sendMessage = useCallback(
     async (text: string) => {
       const trimmed = text.trim();
@@ -259,15 +177,10 @@ export function AgentProvider({
         return next;
       });
 
-      const keyword = directSearchKeyword(trimmed);
-      if (keyword) {
-        await runDirectSearch(keyword);
-        return;
-      }
-
+      // 所有输入都走 AI 对话，AI 会通过 web_search tool 搜索 B站
       await send(trimmed, { history: historyRef.current });
     },
-    [runDirectSearch, send]
+    [send]
   );
 
   const value = useMemo<AgentCtxValue>(
