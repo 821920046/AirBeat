@@ -21,7 +21,8 @@ function rowToTrack(row: DBTrackRow): Track {
     filename: row.r2_key.split("/").pop() || "",
     subDir: "",
     size: row.file_size || 0,
-    url: `/audio/${row.r2_key}`,
+    // r2_key 格式为 "audio/ts_title.ext"，去掉前缀的 "audio/" 避免 /audio/audio/ 双重路由
+    url: `/${row.r2_key}`,
     bvid: row.bvid || undefined,
   };
 }

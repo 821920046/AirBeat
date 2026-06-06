@@ -137,8 +137,9 @@ export function useAudioPlayer(options?: { onEnded?: () => void }) {
     if (!el || !track.url) return;
     setError(null);
     const src = apiUrl(track.url);
+    // 先设 src 再 play。不调 load()：设 src 已触发加载，
+    // 再调 load() 会中断并报 AbortError "The play() request was interrupted"
     el.src = src;
-    el.load();
     setProgress(0);
     setDuration(0);
     void el.play().catch((err) => {

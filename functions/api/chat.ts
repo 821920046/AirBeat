@@ -6,7 +6,7 @@ interface ToolCall { id: string; type: "function"; function: { name: string; arg
 interface OpenRouterResponse { choices?: Array<{ message?: { role: string; content?: string; tool_calls?: ToolCall[] } }>; error?: { message?: string; code?: number }; }
 
 // --- 数据库 ---
-function rowToTrack(row: DBTrackRow): Track { return { id: String(row.id), title: row.title, author: row.author || "", date: row.date_added || "", filename: row.r2_key.split("/").pop() || "", subDir: "", size: row.file_size || 0, url: `/audio/${row.r2_key}`, bvid: row.bvid || undefined }; }
+function rowToTrack(row: DBTrackRow): Track { return { id: String(row.id), title: row.title, author: row.author || "", date: row.date_added || "", filename: row.r2_key.split("/").pop() || "", subDir: "", size: row.file_size || 0, url: `/${row.r2_key}`, bvid: row.bvid || undefined }; }
 async function searchTracks(env: Env, query: string, limit = 20): Promise<{ total: number; tracks: Track[] }> { if (!query.trim()) { const rows = await env.DB.prepare("SELECT * FROM tracks ORDER BY date_added DESC LIMIT ?").bind(limit).all<DBTrackRow>(); return { total: rows.results.length, tracks: rows.results.map(rowToTrack) }; } const like = `%${query}%`; const countRow = await env.DB.prepare("SELECT COUNT(*) as cnt FROM tracks WHERE title LIKE ? OR author LIKE ?").bind(like, like).first<{ cnt: number }>(); const rows = await env.DB.prepare("SELECT * FROM tracks WHERE title LIKE ? OR author LIKE ? ORDER BY date_added DESC LIMIT ?").bind(like, like, limit).all<DBTrackRow>(); return { total: countRow?.cnt || 0, tracks: rows.results.map(rowToTrack) }; }
 
 // --- OpenRouter Key Pool ---

@@ -2,7 +2,7 @@ interface Env { DB: D1Database; AUDIO_BUCKET: R2Bucket; CACHE: KVNamespace; OPEN
 interface Track { id: string; title: string; author: string; date: string; filename: string; subDir: string; size: number; url: string; bvid?: string; }
 interface DBTrackRow { id: number; title: string; author: string; bvid: string | null; r2_key: string; duration: number | null; file_size: number | null; date_added: string; source: string; }
 
-function rowToTrack(row: DBTrackRow): Track { return { id: String(row.id), title: row.title, author: row.author || "", date: row.date_added || "", filename: row.r2_key.split("/").pop() || "", subDir: "", size: row.file_size || 0, url: `/audio/${row.r2_key}`, bvid: row.bvid || undefined }; }
+function rowToTrack(row: DBTrackRow): Track { return { id: String(row.id), title: row.title, author: row.author || "", date: row.date_added || "", filename: row.r2_key.split("/").pop() || "", subDir: "", size: row.file_size || 0, url: `/${row.r2_key}`, bvid: row.bvid || undefined }; }
 
 async function insertTrack(env: Env, track: { title: string; author: string; bvid?: string; r2_key: string; file_size: number; duration?: number }): Promise<Track> {
   const result = await env.DB.prepare("INSERT INTO tracks (title, author, bvid, r2_key, file_size, duration, source) VALUES (?, ?, ?, ?, ?, ?, 'bili')").bind(track.title, track.author || "", track.bvid || null, track.r2_key, track.file_size, track.duration || null).run();
