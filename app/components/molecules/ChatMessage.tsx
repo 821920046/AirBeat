@@ -239,12 +239,14 @@ function getButtonState(
   track: TrackExt,
   inPlaylist: Set<string>,
   converting: Map<string, unknown>,
-  convertTrackErrors: Map<string, string>
+  convertTrackErrors: Map<string, string>,
+  isLocalTrack: boolean
 ): ButtonState {
   const trackKey = track.bvid || track.id;
+  if (isLocalTrack) return "added"; // 本地曲目不需要转换
   if (inPlaylist.has(trackKey)) return "added";
   if (converting.has(trackKey) || converting.has(`${track.source}:${trackKey}`)) return "converting";
-  if (convertTrackErrors.has(trackKey)) return "add"; // 错误后允许重试
+  if (convertTrackErrors.has(trackKey)) return "add";
   return "add";
 }
 
@@ -262,14 +264,25 @@ function TrackCards({ tracks }: { tracks: TrackExt[] }) {
     state.playlist.flatMap((t) => [t.id, t.bvid].filter((v): v is string => Boolean(v)))
   );
 
-  const isCloud = tracks.some((t) => t.bvid || (t.source && t.source !== "bilibili"));
+  // 判断是否为本地已收藏曲目（URL 以 /audio/ 开头）
+  const isLocal = (t: TrackExt) => t.url?.startsWith("/audio/");
+  // 本地曲目：URL以/audio/开头，或source既不是netease/youtube/bilibili（说明是search_local返回的）
+  const isLocalTrack = (t: TrackExt) => isLocal(t) || (!!t.source && !["netease","youtube","bilibili"].includes(t.source));
+
+  const isCloud = tracks.some((t) => !isLocalTrack(t));
 
   const allDone = tracks.every((t) => {
-    const s = getButtonState(t, inPlaylist, converting, errors);
+    const s = getButtonState(t, inPlaylist, converting, errors, isLocal(t));
     return s !== "add";
   });
 
   const handleAdd = async (track: TrackExt) => {
+    // 本地曲库的 track 直接加入播放列表，不需要转换
+    if (isLocalTrack(track)) {
+      addTracks([track]);
+      return;
+    }
+
     const trackId = track.bvid || track.id;
     const trackSource = track.source || (track.bvid ? "bilibili" : "netease");
     const artist = track.artist || track.author || "";
@@ -293,28 +306,28 @@ function TrackCards({ tracks }: { tracks: TrackExt[] }) {
   };
 
   const handleAddAll = async () => {
-    if (isCloud) {
-      const toAdd = tracks.filter((t) => getButtonState(t, inPlaylist, converting, errors) === "add");
-      for (const track of toAdd) {
-        const trackId = track.bvid || track.id;
-        const trackSource = track.source || (track.bvid ? "bilibili" : "netease");
-        const artist = track.artist || track.author || "";
+    // 本地曲目直接加入
+    const localTracks = tracks.filter((t) => isLocalTrack(t));
+    if (localTracks.length > 0) addTracks(localTracks);
 
-        if (trackSource === "bilibili" && trackId) {
-          fetchDanmaku(trackId);
-          try {
-            const convertedTrack = await convertBvid(trackId, track.title, track.author || artist);
-            addTracks([convertedTrack]);
-          } catch { /* continue with next */ }
-        } else {
-          try {
-            const convertedTrack = await convertTrack(trackId, trackSource, track.title, artist);
-            addTracks([convertedTrack]);
-          } catch { /* continue with next */ }
-        }
+    const cloudTracks = tracks.filter((t) => !isLocalTrack(t) && getButtonState(t, inPlaylist, converting, errors, false) === "add");
+    for (const track of cloudTracks) {
+      const trackId = track.bvid || track.id;
+      const trackSource = track.source || (track.bvid ? "bilibili" : "netease");
+      const artist = track.artist || track.author || "";
+
+      if (trackSource === "bilibili" && trackId) {
+        fetchDanmaku(trackId);
+        try {
+          const convertedTrack = await convertBvid(trackId, track.title, track.author || artist);
+          addTracks([convertedTrack]);
+        } catch { /* continue with next */ }
+      } else {
+        try {
+          const convertedTrack = await convertTrack(trackId, trackSource, track.title, artist);
+          addTracks([convertedTrack]);
+        } catch { /* continue with next */ }
       }
-    } else {
-      addTracks(tracks);
     }
   };
 
@@ -348,7 +361,7 @@ function TrackCards({ tracks }: { tracks: TrackExt[] }) {
       </div>
       <div className="max-h-[16rem] overflow-y-auto scrollbar-thin">
         {tracks.map((t) => {
-          const btnState = getButtonState(t, inPlaylist, converting, errors);
+          const btnState = getButtonState(t, inPlaylist, converting, errors, isLocalTrack(t));
           const cfg = BTN_CONFIG[btnState];
           const trackKey = t.bvid || t.id;
           const progress = converting.get(trackKey) || converting.get(`${t.source}:${trackKey}`)
