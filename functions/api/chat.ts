@@ -1,4 +1,4 @@
-interface Env { DB: D1Database; AUDIO_BUCKET: R2Bucket; CACHE: KVNamespace; OPENROUTER_API_KEY: string; OPENROUTER_MODEL: string; }
+interface Env { DB: D1Database; AUDIO_BUCKET: R2Bucket; CACHE: KVNamespace; OPENROUTER_API_KEY: string; OPENROUTER_MODEL: string; MUSIC_API_BASE?: string; }
 interface Track { id: string; title: string; author: string; date: string; filename: string; subDir: string; size: number; url: string; bvid?: string; }
 interface DBTrackRow { id: number; title: string; author: string; bvid: string | null; r2_key: string; duration: number | null; file_size: number | null; date_added: string; source: string; }
 interface ChatMsg { role: "system" | "user" | "assistant" | "tool"; content: string; tool_call_id?: string; tool_calls?: ToolCall[]; }
@@ -47,44 +47,74 @@ async function chatCompletion(env: Env, messages: ChatMsg[], tools?: unknown[]):
 const SYSTEM_PROMPT = `你是 AirBeat 的 AI 音乐助手，运行在一个终端风格的音乐播放器里。保持简洁中文，像终端命令行一样回复用户。
 
 ## 你的核心能力
-1. **搜索 B站 视频** — 用 web_search 工具搜索 bilibili.com，提取视频 BV号、标题、作者、时长
+1. **搜索音乐** — 用 search_music 工具搜索音乐，支持多源（网易云/YouTube/B站），优先返回网易云结果
 2. **搜索本地曲库** — 用 search_local 工具查询已收藏的歌曲
 3. **闲聊** — 简短回答音乐相关问题
 
 ## 工作流程
 当用户说"搜 XXX"、"我想听 XXX"、"找 XXX的歌"、"放 XXX"等音乐请求时：
 1. 先用 search_local 查本地是否已有该歌曲
-2. 如果没有或者用户明确要搜 B站，用 web_search 搜 bilibili.com
-   搜索格式: site:bilibili.com 歌曲名 歌手名 MV
-3. 从搜索结果中提取视频信息，用 \`\`\`tracks 代码块输出
+2. 用 search_music 搜索在线音乐
+3. 从搜索结果中提取信息，用 \`\`\`tracks 代码块输出
 
 当用户只是聊天/问问题时，直接回答，不要无故搜索。
 
 ## 输出 tracks 格式
 必须是合法的 JSON 数组：
 \`\`\`tracks
-[{"bvid":"BVxxxxxx","title":"歌曲名","author":"作者/UP主","duration":"03:45","url":"","id":"BVxxxxxx"}]
+[{"id":"歌曲ID","title":"歌曲名","artist":"歌手","duration":"03:45","source":"netease","url":"https://music.163.com/song?id=歌曲ID"}]
 \`\`\`
-每个 track 必须有 bvid, title, author。duration 和 url 可选。
-搜索到的 B站 结果 url 留空，id 填 bvid，用户点击"ADD"后系统会自动处理。
+每个 track 必须有 id, title, artist, source 字段。duration 和 url 可选。
+source 取值：netease（网易云）、youtube（YouTube）、bilibili（B站）
 
 ## 重要限制
-- web_search 只能搜索公开网页信息，无法调用 B站 API
-- 搜索 B站 时用中文关键词
+- search_music 会自动从多个音乐源搜索，不需要分别指定平台
 - tracks 数组中的 JSON 必须严格合法，字段名用双引号`;
 
 const TOOLS = [
   { type: "function" as const, function: { name: "search_local", description: "搜索本地已收藏的曲库", parameters: { type: "object", properties: { keyword: { type: "string", description: "搜索关键词（歌名/歌手）" } }, required: ["keyword"] } } },
-  { type: "function" as const, function: { name: "web_search", description: "在 B站 (bilibili.com) 搜索视频。用于查找用户想听的歌曲 MV、音乐视频等。返回搜索结果中提取的视频信息（BV号、标题、作者、时长）。", parameters: { type: "object", properties: { query: { type: "string", description: "搜索关键词，格式: site:bilibili.com 歌曲名 歌手" } }, required: ["query"] } } },
+  { type: "function" as const, function: { name: "search_music", description: "搜索在线音乐（网易云/YouTube/B站多源）。查找歌曲、MV、音频时使用。", parameters: { type: "object", properties: { query: { type: "string", description: "搜索关键词，如: 周杰伦 晴天" } }, required: ["query"] } } },
 ];
 
 function createSSE() { const enc = new TextEncoder(); let ctrl: ReadableStreamDefaultController<Uint8Array>; const stream = new ReadableStream<Uint8Array>({ start(c) { ctrl = c; } }); return { stream, send(ev: string, d: unknown) { ctrl.enqueue(enc.encode(`event: ${ev}\ndata: ${JSON.stringify(d)}\n\n`)); }, close() { ctrl.close(); } }; }
 
-// 执行 web_search — 用 Google Custom Search 或直接 web fetch 搜索 B站
-async function execWebSearch(query: string): Promise<string> {
-  // 从公开搜索引擎抓取 B站 搜索结果
-  // Google: site:bilibili.com 关键词
-  const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}&num=10`;
+async function execWebSearch(query: string, env: Env): Promise<string> {
+  // 调用内网 music API 搜索多源音乐
+  const apiBase = env.MUSIC_API_BASE || "";
+
+  // 尝试用网易云 API 直接搜索
+  if (apiBase) {
+    try {
+      const ncmResp = await fetch(`${apiBase}/search?keywords=${encodeURIComponent(query)}&type=1&limit=10`, {
+        headers: { "User-Agent": "AirBeat/1.0" },
+      });
+      if (ncmResp.ok) {
+        const json = (await ncmResp.json()) as {
+          code: number;
+          result?: { songs?: Array<{ id: number; name: string; ar?: Array<{ name: string }>; dt?: number; al?: { picUrl?: string } }> };
+        };
+        if (json.code === 200 && json.result?.songs?.length) {
+          const tracks = json.result.songs.map(s => {
+            const sec = Math.floor((s.dt || 0) / 1000);
+            return {
+              id: String(s.id),
+              title: s.name,
+              artist: s.ar?.map(a => a.name).join("/") || "未知",
+              duration: `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`,
+              source: "netease",
+              url: `https://music.163.com/song?id=${s.id}`,
+            };
+          });
+          return JSON.stringify({ tracks, usedSource: "netease" });
+        }
+      }
+    } catch (err) {
+      console.warn("[chat] netease search failed:", err);
+    }
+  }
+
+  // Fallback: Google + B站搜索
+  const searchUrl = `https://www.google.com/search?q=${encodeURIComponent("site:bilibili.com " + query)}&num=10`;
   try {
     const resp = await fetch(searchUrl, {
       headers: {
@@ -94,8 +124,6 @@ async function execWebSearch(query: string): Promise<string> {
     });
     const html = await resp.text();
 
-    // 从 Google 搜索结果中提取 B站 视频链接
-    // B站视频 URL 格式: bilibili.com/video/BVxxxxxx 或 b23.tv/xxxxx
     const bvRe = /bilibili\.com\/video\/(BV[a-zA-Z0-9]{10})/g;
     const bvMatches = new Set<string>();
     let m: RegExpExecArray | null;
@@ -103,7 +131,6 @@ async function execWebSearch(query: string): Promise<string> {
       bvMatches.add(m[1]!);
     }
 
-    // 提取标题（Google 搜索结果标题通常在 h3 中）
     const titleRe = /<h3[^>]*>([^<]+(?:<[^/][^>]*>[^<]*)*?)<\/h3>/gi;
     const titles: string[] = [];
     let tm: RegExpExecArray | null;
@@ -116,20 +143,21 @@ async function execWebSearch(query: string): Promise<string> {
 
     const bvids = [...bvMatches].slice(0, 8);
     if (bvids.length === 0) {
-      return JSON.stringify({ results: [], note: "未在 B站 找到匹配视频，请尝试更精确的关键词" });
+      return JSON.stringify({ tracks: [], usedSource: "none", note: "未找到匹配视频" });
     }
 
-    const results = bvids.map((bv, i) => ({
-      bvid: bv,
-      title: titles[i] || "(从搜索结果提取，点击查看详情)",
-      author: "",
+    const tracks = bvids.map((bv, i) => ({
+      id: bv,
+      title: titles[i] || "(从搜索结果提取)",
+      artist: "",
       duration: "",
+      source: "bilibili",
       url: `https://www.bilibili.com/video/${bv}`,
     }));
 
-    return JSON.stringify({ results, total: bvids.length });
+    return JSON.stringify({ tracks, usedSource: "bilibili" });
   } catch (err) {
-    return JSON.stringify({ results: [], error: String(err) });
+    return JSON.stringify({ tracks: [], error: String(err) });
   }
 }
 
@@ -137,8 +165,10 @@ async function execTool(env: Env, name: string, args: Record<string, unknown>): 
   switch (name) {
     case "search_local":
       return JSON.stringify(await searchTracks(env, String(args.keyword || ""), 20));
+    case "search_music":
+      return await execWebSearch(String(args.query || ""), env);
     case "web_search":
-      return await execWebSearch(String(args.query || ""));
+      return await execWebSearch(String(args.query || ""), env);
     default:
       return JSON.stringify({ error: `Unknown tool: ${name}` });
   }

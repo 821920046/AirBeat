@@ -3,6 +3,9 @@ import { handleBiliSearch } from "./handlers/bili-search";
 import { handleBiliDanmaku } from "./handlers/bili-danmaku";
 import { handleBiliAudioUrl } from "./handlers/bili-audio-url";
 import { handleBiliProxy } from "./handlers/bili-proxy";
+import { handleMusicSearch } from "./handlers/music-search";
+import { handleMusicAudioUrl } from "./handlers/music-audio-url";
+import { handleMusicProxy } from "./handlers/music-proxy";
 import { handleChat } from "./handlers/chat";
 import { handleUpload } from "./handlers/upload";
 import { handleTracks } from "./handlers/tracks";
@@ -19,7 +22,12 @@ const worker = {
     const method = request.method;
 
     try {
-      // B站相关
+      // 多源音乐 API（新）
+      if (method === "GET" && path === "/api/music/search") return handleMusicSearch(url, env);
+      if (method === "GET" && path === "/api/music/audio-url") return handleMusicAudioUrl(url, env);
+      if (method === "GET" && path === "/api/music/proxy") return handleMusicProxy(url);
+
+      // B站相关（弹幕保留，搜索/音频降级为备用）
       if (method === "GET" && path === "/api/bili/search") return handleBiliSearch(url, env);
       if (method === "GET" && path === "/api/bili/danmaku") return handleBiliDanmaku(url, env);
       if (method === "GET" && path === "/api/bili/audio-url") return handleBiliAudioUrl(url, env);

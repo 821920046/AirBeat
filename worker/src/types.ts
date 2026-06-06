@@ -32,4 +32,6 @@ export interface Env {
   CACHE: KVNamespace;
   OPENROUTER_API_KEY: string;
   OPENROUTER_MODEL: string;
+  MUSIC_API_BASE?: string;   // 网易云 API 基础 URL（自部署 NeteaseCloudMusicApi 实例）
+  YOUTUBE_API_BASE?: string; // Invidious 实例 URL（可选，默认用内置列表）
 }
