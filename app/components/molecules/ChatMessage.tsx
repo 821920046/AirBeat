@@ -246,13 +246,15 @@ function getButtonState(
   inPlaylist: Set<string>,
   converting: Map<string, unknown>,
   convertTrackErrors: Map<string, string>,
-  isLocalTrack: boolean
 ): ButtonState {
   const trackKey = track.bvid || track.id;
-  if (isLocalTrack) return "added"; // 本地曲目不需要转换
+  // 已在播放列表 → 显示 ADDED（不管本地还是在线）
   if (inPlaylist.has(trackKey)) return "added";
+  // 正在转换中
   if (converting.has(trackKey) || converting.has(`${track.source}:${trackKey}`)) return "converting";
+  // 之前转换失败过 → 允许重试
   if (convertTrackErrors.has(trackKey)) return "add";
+  // 可添加
   return "add";
 }
 
@@ -278,7 +280,7 @@ function TrackCards({ tracks }: { tracks: TrackExt[] }) {
   const isCloud = tracks.some((t) => !isLocalTrack(t));
 
   const allDone = tracks.every((t) => {
-    const s = getButtonState(t, inPlaylist, converting, errors, isLocal(t));
+    const s = getButtonState(t, inPlaylist, converting, errors);
     return s !== "add";
   });
 
@@ -316,7 +318,7 @@ function TrackCards({ tracks }: { tracks: TrackExt[] }) {
     const localTracks = tracks.filter((t) => isLocalTrack(t));
     if (localTracks.length > 0) addTracks(localTracks);
 
-    const cloudTracks = tracks.filter((t) => !isLocalTrack(t) && getButtonState(t, inPlaylist, converting, errors, false) === "add");
+    const cloudTracks = tracks.filter((t) => !isLocalTrack(t) && getButtonState(t, inPlaylist, converting, errors) === "add");
     for (const track of cloudTracks) {
       const trackId = track.bvid || track.id;
       const trackSource = track.source || (track.bvid ? "bilibili" : "netease");
@@ -367,7 +369,7 @@ function TrackCards({ tracks }: { tracks: TrackExt[] }) {
       </div>
       <div className="max-h-[16rem] overflow-y-auto scrollbar-thin">
         {tracks.map((t) => {
-          const btnState = getButtonState(t, inPlaylist, converting, errors, isLocalTrack(t));
+          const btnState = getButtonState(t, inPlaylist, converting, errors);
           const cfg = BTN_CONFIG[btnState];
           const trackKey = t.bvid || t.id;
           const progress = converting.get(trackKey) || converting.get(`${t.source}:${trackKey}`)
