@@ -13,6 +13,8 @@ interface DBTrackRow {
 }
 
 function rowToTrack(row: DBTrackRow): Track {
+  const sec = row.duration || 0;
+  const durStr = sec > 0 ? `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, "0")}` : "";
   return {
     id: String(row.id),
     title: row.title,
@@ -24,6 +26,9 @@ function rowToTrack(row: DBTrackRow): Track {
     // r2_key 格式为 "audio/ts_title.ext"，去掉前缀的 "audio/" 避免 /audio/audio/ 双重路由
     url: `/audio/${row.r2_key}`,
     bvid: row.bvid || undefined,
+    duration: sec,
+    source: "local",
+    artist: row.author || "",
   };
 }
 

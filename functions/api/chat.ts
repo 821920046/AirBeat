@@ -1,12 +1,29 @@
 interface Env { DB: D1Database; AUDIO_BUCKET: R2Bucket; CACHE: KVNamespace; OPENROUTER_API_KEY: string; OPENROUTER_MODEL: string; MUSIC_API_BASE?: string; }
-interface Track { id: string; title: string; author: string; date: string; filename: string; subDir: string; size: number; url: string; bvid?: string; }
+interface Track { id: string; title: string; author: string; date: string; filename: string; subDir: string; size: number; url: string; bvid?: string; duration?: number; source?: string; }
 interface DBTrackRow { id: number; title: string; author: string; bvid: string | null; r2_key: string; duration: number | null; file_size: number | null; date_added: string; source: string; }
 interface ChatMsg { role: "system" | "user" | "assistant" | "tool"; content: string; tool_call_id?: string; tool_calls?: ToolCall[]; }
 interface ToolCall { id: string; type: "function"; function: { name: string; arguments: string }; }
 interface OpenRouterResponse { choices?: Array<{ message?: { role: string; content?: string; tool_calls?: ToolCall[] } }>; error?: { message?: string; code?: number }; }
 
 // --- 数据库 ---
-function rowToTrack(row: DBTrackRow): Track { return { id: String(row.id), title: row.title, author: row.author || "", date: row.date_added || "", filename: row.r2_key.split("/").pop() || "", subDir: "", size: row.file_size || 0, url: `/audio/${row.r2_key}`, bvid: row.bvid || undefined }; }
+function rowToTrack(row: DBTrackRow): Track {
+  const sec = row.duration || 0;
+  const durStr = sec > 0 ? `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, "0")}` : "";
+  return {
+    id: String(row.id),
+    title: row.title,
+    author: row.author || "",
+    date: row.date_added || "",
+    filename: row.r2_key.split("/").pop() || "",
+    subDir: "",
+    size: row.file_size || 0,
+    url: `/audio/${row.r2_key}`,
+    bvid: row.bvid || undefined,
+    duration: sec,
+    source: "local",
+    artist: row.author || "",
+  };
+}
 async function searchTracks(env: Env, query: string, limit = 20): Promise<{ total: number; tracks: Track[] }> { if (!query.trim()) { const rows = await env.DB.prepare("SELECT * FROM tracks ORDER BY date_added DESC LIMIT ?").bind(limit).all<DBTrackRow>(); return { total: rows.results.length, tracks: rows.results.map(rowToTrack) }; } const like = `%${query}%`; const countRow = await env.DB.prepare("SELECT COUNT(*) as cnt FROM tracks WHERE title LIKE ? OR author LIKE ?").bind(like, like).first<{ cnt: number }>(); const rows = await env.DB.prepare("SELECT * FROM tracks WHERE title LIKE ? OR author LIKE ? ORDER BY date_added DESC LIMIT ?").bind(like, like, limit).all<DBTrackRow>(); return { total: countRow?.cnt || 0, tracks: rows.results.map(rowToTrack) }; }
 
 // --- OpenRouter Key Pool ---
@@ -86,12 +103,15 @@ const SYSTEM_PROMPT = `你是 AirBeat 的 AI 音乐助手，运行在一个终�
 \`\`\`tracks
 [{"id":"歌曲ID","title":"歌曲名","artist":"歌手","duration":"03:45","source":"netease","url":"https://music.163.com/song?id=歌曲ID"}]
 \`\`\`
-每个 track 必须有 id, title, artist, source 字段。duration 和 url 可选。
-source 取值：netease（网易云）、youtube（YouTube）、bilibili（B站）
+每个 track 必须有 id, title, artist, source, url 字段。duration 可选。
+source 取值：netease（网易云）、youtube（YouTube）、bilibili（B站）、local（本地已收藏）
+- 如果来自 search_local 返回的数据，source 必须是 "local"，url 和 artist 必须原样保留
+- search_local 返回的数据已包含 url（/audio/ 开头）和 source:"local"，直接复制即可
 
 ## 重要限制
 - search_music 会自动从多个音乐源搜索，不需要分别指定平台
-- tracks 数组中的 JSON 必须严格合法，字段名用双引号`;
+- tracks 数组中的 JSON 必须严格合法，字段名用双引号
+- 本地搜索结果优先放在前面`;
 
 const TOOLS = [
   { type: "function" as const, function: { name: "search_local", description: "搜索本地已收藏的曲库", parameters: { type: "object", properties: { keyword: { type: "string", description: "搜索关键词（歌名/歌手）" } }, required: ["keyword"] } } },
