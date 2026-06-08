@@ -123,7 +123,10 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: En
       const source = url.searchParams.get("source") || "netease";
       if (!trackId?.trim()) return jr({ error: "id is required" }, 400);
 
-      if (source === "netease" && env.MUSIC_API_BASE) {
+      if (source === "netease") {
+        if (!env.MUSIC_API_BASE) {
+          return jr({ error: "Netease source 未配置: 请在 Cloudflare Pages 环境变量中设置 MUSIC_API_BASE", source }, 503);
+        }
         const ncmResp = await fetch(`${env.MUSIC_API_BASE}/song/url?id=${trackId}&br=320000`, {
           headers: { "User-Agent": "AirBeat/1.0" },
         });

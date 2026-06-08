@@ -25,20 +25,42 @@ async function chatCompletion(env: Env, messages: ChatMsg[], tools?: unknown[]):
   const models = [primaryModel, ...MODEL_FALLBACKS.filter(m => m !== primaryModel)];
   const pool = shuffle(await getKeyPool(env));
   if (pool.length === 0) throw new Error("No API keys configured");
-  const keysPerModel = Math.min(2, pool.length);
+
   for (const model of models) {
     const body: Record<string, unknown> = { model, messages, temperature: 0.7, max_tokens: 4096 };
     if (tools && tools.length > 0) { body.tools = tools; body.tool_choice = "auto"; }
     const bodyStr = JSON.stringify(body);
-    let modelRateLimited = false;
-    for (let i = 0; i < keysPerModel; i++) {
-      const key = pool[i % pool.length];
-      const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}`, "HTTP-Referer": "https://airbeat-8mo.pages.dev", "X-Title": "AirBeat" }, body: bodyStr });
-      if (resp.status === 429) { modelRateLimited = true; break; }
-      if (!resp.ok) { const t = await resp.text(); console.error(`Model ${model} error ${resp.status}: ${t}`); break; }
-      return resp.json() as Promise<OpenRouterResponse>;
+
+    // 遍历所有 key，直到某个 key 成功；只有全部 key 都 429 才算模型限流
+    let modelRateLimited = true;
+    for (const key of pool) {
+      const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${key}`,
+          "HTTP-Referer": "https://airbeat-8mo.pages.dev",
+          "X-Title": "AirBeat",
+        },
+        body: bodyStr,
+      });
+
+      if (resp.ok) return resp.json() as Promise<OpenRouterResponse>;
+
+      // 429 → 这个 key 限流了，试下一个 key
+      if (resp.status === 429) continue;
+
+      // 其他错误（4xx 非 429 / 5xx）→ 这个 key 可能有问题，也试下一个
+      const t = await resp.text();
+      console.error(`Model ${model} key ${key.slice(0, 12)}... error ${resp.status}: ${t.slice(0, 200)}`);
+      modelRateLimited = false; // 不是限流，是其他错误，不标记模型限流
     }
-    if (modelRateLimited) console.log(`Model ${model} rate limited, trying next...`);
+
+    if (modelRateLimited) {
+      console.log(`Model ${model}: all ${pool.length} key(s) rate limited, trying next model...`);
+    } else {
+      console.log(`Model ${model}: all keys failed (non-429), trying next model...`);
+    }
   }
   throw new Error("All models rate limited");
 }

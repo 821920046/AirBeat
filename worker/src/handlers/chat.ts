@@ -174,7 +174,7 @@ export async function handleChat(request: Request, env: Env): Promise<Response> 
       try {
         response = await chatCompletion(env, messages, TOOLS);
       } catch (err) {
-        if (String(err).includes("RATE_LIMITED")) {
+        if (String(err).toLowerCase().includes("rate limited")) {
           send("output", {
             type: "assistant",
             message: {
@@ -249,7 +249,7 @@ export async function handleChat(request: Request, env: Env): Promise<Response> 
           try {
             response = await chatCompletion(env, messages, TOOLS);
           } catch (err) {
-            if (String(err).includes("RATE_LIMITED")) {
+            if (String(err).toLowerCase().includes("rate limited")) {
               send("output", {
                 type: "assistant",
                 message: {

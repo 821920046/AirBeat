@@ -17,3 +17,5 @@ bucket_name = "airbeat-audio"
 
 [vars]
 OPENROUTER_MODEL = "google/gemma-4-26b-a4b-it:free"
+MUSIC_API_BASE = ""
+YOUTUBE_API_BASE = ""
