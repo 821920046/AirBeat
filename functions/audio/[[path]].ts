@@ -12,7 +12,8 @@ function audioHeaders(contentType = "audio/mpeg"): Headers {
 
 export const onRequestGet = async ({ request, env }: { request: Request; env: Env }) => {
   const url = new URL(request.url);
-  const r2Key = decodeURIComponent(url.pathname.slice("/audio/".length));
+  // /audio/ 去掉前缀得到纯文件名，R2 key 格式为 "audio/xxx.ext"
+  const r2Key = "audio/" + decodeURIComponent(url.pathname.slice("/audio/".length));
   if (!r2Key || r2Key.includes("..")) return er("Invalid path", 400);
 
   const rangeHeader = request.headers.get("Range");

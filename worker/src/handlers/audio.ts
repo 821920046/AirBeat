@@ -3,8 +3,8 @@ import type { Env } from "../types";
 
 export async function handleAudio(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
-  // /audio/ 去掉前缀得到 R2 key
-  const r2Key = decodeURIComponent(url.pathname.slice("/audio/".length));
+  // /audio/ 去掉前缀得到纯文件名，R2 key 格式为 "audio/xxx.ext"
+  const r2Key = "audio/" + decodeURIComponent(url.pathname.slice("/audio/".length));
 
   if (!r2Key || r2Key.includes("..")) {
     return errorResponse("Invalid path", 400);

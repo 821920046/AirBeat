@@ -34,7 +34,17 @@ function useDurationMap(tracks: Track[]) {
 
     const audio = new Audio();
     audio.preload = "metadata";
+
+    // 超时保护：8 秒后无论如何释放，防止 Audio 不触发事件导致永久死锁
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      finish(undefined);
+    }, 8000);
+
     const finish = (dur: number | undefined) => {
+      clearTimeout(timer);
+      if (timedOut) return; // 已经处理过了，防止重复
       if (Number.isFinite(dur) && (dur ?? 0) > 0) {
         setMap((prev) => ({ ...prev, [id]: dur! }));
       }
@@ -45,6 +55,12 @@ function useDurationMap(tracks: Track[]) {
     };
     audio.addEventListener("loadedmetadata", () => finish(audio.duration), { once: true });
     audio.addEventListener("error", () => finish(undefined), { once: true });
+    // stalled 卡住超 5 秒也视为失败
+    audio.addEventListener("stalled", () => {
+      setTimeout(() => {
+        if (audio.readyState < HTMLMediaElement.HAVE_FUTURE_DATA) finish(undefined);
+      }, 5000);
+    });
     audio.src = apiUrl(t.url);
   };
 
