@@ -24,7 +24,7 @@ function rowToTrack(row: DBTrackRow): Track {
     subDir: "",
     size: row.file_size || 0,
     // r2_key 格式为 "audio/ts_title.ext"，去掉前缀的 "audio/" 避免 /audio/audio/ 双重路由
-    url: `/audio/${row.r2_key}`,
+    url: `/audio/${row.r2_key.replace(/^audio\//, "")}`,
     bvid: row.bvid || undefined,
     duration: sec,
     source: "local",

@@ -17,7 +17,7 @@ function rowToTrack(row: DBTrackRow): Track {
     filename: row.r2_key.split("/").pop() || "",
     subDir: "",
     size: row.file_size || 0,
-    url: `/audio/${row.r2_key}`,
+    url: `/audio/${row.r2_key.replace(/^audio\//, "")}`,
     bvid: row.bvid || undefined,
     duration: sec,
     source: "local",

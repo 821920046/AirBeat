@@ -2,7 +2,7 @@ interface Env { DB: D1Database; AUDIO_BUCKET: R2Bucket; CACHE: KVNamespace; OPEN
 interface Track { id: string; title: string; author: string; date: string; filename: string; subDir: string; size: number; url: string; bvid?: string; }
 interface DBTrackRow { id: number; title: string; author: string; bvid: string | null; r2_key: string; duration: number | null; file_size: number | null; date_added: string; source: string; }
 
-function rowToTrack(row: DBTrackRow): Track { return { id: String(row.id), title: row.title, author: row.author || "", date: row.date_added || "", filename: row.r2_key.split("/").pop() || "", subDir: "", size: row.file_size || 0, url: `/audio/${row.r2_key}`, bvid: row.bvid || undefined }; }
+function rowToTrack(row: DBTrackRow): Track { return { ...row, id: String(row.id), url: `/audio/${row.r2_key.replace(/^audio\//, "")}`, filename: row.r2_key.split("/").pop() || "", bvid: row.bvid || undefined }; }
 
 async function searchTracks(env: Env, query: string, limit = 20): Promise<{ total: number; tracks: Track[] }> {
   if (!query.trim()) { const rows = await env.DB.prepare("SELECT * FROM tracks ORDER BY date_added DESC LIMIT ?").bind(limit).all<DBTrackRow>(); return { total: rows.results.length, tracks: rows.results.map(rowToTrack) }; }
