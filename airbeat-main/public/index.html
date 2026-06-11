@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang='zh-CN' data-theme='dark'>
+<head>
+<meta charset='UTF-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'>
+<title>AirBeat · 在线音乐播放器</title>
+<link rel='manifest' href='/manifest.json'>
+<meta name='theme-color' content='#8b5cf6'>
+<link rel='stylesheet' href='/css/style.css'>
+</head>
+<body>
+<div class='app'>
+  <aside class='sidebar glass'>
+    <div class='logo'>🎵 AirBeat</div>
+    <nav>
+      <a href='#/discover' data-route='discover'>✨ 发现</a>
+      <a href='#/search' data-route='search'>🔍 搜索</a>
+      <a href='#/radio' data-route='radio'>📻 电台</a>
+      <a href='#/recognize' data-route='recognize'>🎙️ 听歌识曲</a>
+      <a href='#/playlists' data-route='playlists'>📚 我的歌单</a>
+      <a href='#/favorites' data-route='favorites'>❤️ 收藏</a>
+      <a href='#/recent' data-route='recent'>🕐 最近播放</a>
+      <a href='#/sources' data-route='sources'>🧩 音源</a>
+    </nav>
+    <div class='sidebar-bottom'>
+      <button id='theme-toggle' class='icon-btn' title='切换主题'>🌓</button>
+      <button id='auth-btn' class='btn'>登录</button>
+    </div>
+  </aside>
+  <main id='view'></main>
+</div>
+
+<footer id='player-bar' class='glass'>
+  <div class='pb-left'>
+    <img id='pb-cover' src='' alt='' style='visibility:hidden'>
+    <div style='min-width:0'>
+      <div id='pb-title'>未在播放</div>
+      <div id='pb-artist'></div>
+    </div>
+  </div>
+  <div class='pb-center'>
+    <div class='pb-buttons'>
+      <button id='btn-mode' class='icon-btn' title='播放模式'>🔁</button>
+      <button id='btn-prev' class='icon-btn'>⏮</button>
+      <button id='btn-play' class='icon-btn big'>▶</button>
+      <button id='btn-next' class='icon-btn'>⏭</button>
+      <button id='btn-full' class='icon-btn' title='全屏播放页'>⛶</button>
+    </div>
+    <div class='pb-progress'>
+      <span id='t-cur'>0:00</span>
+      <input type='range' id='seek' min='0' max='1000' value='0'>
+      <span id='t-dur'>0:00</span>
+    </div>
+  </div>
+  <div class='pb-right'>🔊 <input type='range' id='volume' min='0' max='100' value='80'></div>
+</footer>
+
+<section id='fullscreen' class='hidden'>
+  <button id='fs-close' class='icon-btn'>▼</button>
+  <canvas id='fs-canvas'></canvas>
+  <div class='fs-content'>
+    <div class='fs-left'>
+      <img id='fs-cover' src='' alt=''>
+      <div id='fs-title'></div>
+      <div id='fs-artist'></div>
+      <button id='viz-style' class='btn ghost'>切换可视化样式</button>
+      <button id='eq-toggle' class='btn ghost'>均衡器</button>
+    </div>
+    <div class='fs-lyrics' id='fs-lyrics'><p class='muted'>暂无歌词</p></div>
+  </div>
+  <div id='eq-panel' class='eq-panel glass hidden'>
+    <div class='eq-header'>
+      <select id='eq-preset' class='btn ghost' style='color:var(--text)'>
+        <option value=''>自定义</option>
+        <option value='pop'>流行</option>
+        <option value='rock'>摇滚</option>
+        <option value='vocal'>人声</option>
+        <option value='classical'>古典</option>
+        <option value='electronic'>电子</option>
+      </select>
+      <button id='eq-reset' class='btn ghost'>重置</button>
+      <button id='eq-close' class='icon-btn'>✕</button>
+    </div>
+    <div class='eq-bands' id='eq-bands'></div>
+  </div>
+</section>
+
+<dialog id='auth-modal' class='glass'>
+  <h3 id='auth-title'>登录</h3>
+  <form id='auth-form'>
+    <input id='auth-email' type='email' placeholder='邮箱' required>
+    <input id='auth-password' type='password' placeholder='密码(至少 6 位)' required minlength='6'>
+    <p id='auth-error' class='error'></p>
+    <button class='btn' type='submit' id='auth-submit'>登录</button>
+    <button class='btn ghost' type='button' id='auth-switch'>没有账号?去注册</button>
+    <button class='btn ghost' type='button' id='auth-close'>关闭</button>
+  </form>
+</dialog>
+
+<dialog id='picker-modal' class='glass'>
+  <h3>加入歌单</h3>
+  <div id='picker-list' style='margin:14px 0'></div>
+  <form method='dialog' class='picker-form'>
+    <input id='picker-name' placeholder='新歌单名称'>
+    <button class='btn' id='picker-create' type='button'>创建并加入</button>
+    <button class='btn ghost' type='submit'>取消</button>
+  </form>
+</dialog>
+
+<audio id='audio' crossorigin='anonymous' preload='auto'></audio>
+<script type='module' src='/js/app.js'></script>
+</body>
+</html>
