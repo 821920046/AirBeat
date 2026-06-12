@@ -21,16 +21,27 @@ function pass(upstream, keys) {
 /** 边缘缓存：Cache API 命中直接返回，miss 则 fetch 后存入 */
 async function cachedFetch(key, fetcher, ttl = 300) {
   const cache = caches.default;
-  const hit = await cache.match(key);
-  if (hit) return hit;
-  const res = await fetcher();
-  if (res.ok) {
-    const toCache = new Response(res.body, res);
-    toCache.headers.set('Cache-Control', 'public, max-age=' + ttl);
-    // Cloudflare Cache API 用 ctx.waitUntil 不阻塞响应
-    await cache.put(key, toCache);
+  try {
+    const hit = await cache.match(key);
+    if (hit) return hit;
+  } catch { /* 缓存读取失败，继续请求 */ }
+  try {
+    const res = await fetcher();
+    if (res.ok) {
+      try {
+        const toCache = new Response(res.body, res);
+        toCache.headers.set('Cache-Control', 'public, max-age=' + ttl);
+        await cache.put(key, toCache);
+      } catch { /* 缓存写入失败不阻塞响应 */ }
+    }
+    return res;
+  } catch (err) {
+    // 上游请求失败（DNS 解析失败 / 连接超时）→ 返回 502 而不是让整个请求 500
+    return new Response(JSON.stringify({ error: '上游音源不可达: ' + err.message }), {
+      status: 502,
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+    });
   }
-  return res;
 }
 
 export async function onRequestGet({ request, env, params }) {
@@ -76,7 +87,11 @@ export async function onRequestGet({ request, env, params }) {
   const isSearchOrChart = /\/search|\/chart|\/tracks\/\?|\/stations\/search|\/stations\/topvote/.test(url.pathname + url.search);
   const ttl = isSearchOrChart ? 300 : 60;
   const cacheKey = new Request(request.url, { method: 'GET' });
-  const upstream = await cachedFetch(cacheKey, () =>
-    fetch(target.toString(), { headers: { 'User-Agent': 'airbeat/1.0' } }), ttl);
+  const upstream = await cachedFetch(cacheKey, () => {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000); // 8 秒超时
+    return fetch(target.toString(), { headers: { 'User-Agent': 'airbeat/1.0' }, signal: ctrl.signal })
+      .finally(() => clearTimeout(timer));
+  }, ttl);
   return pass(upstream, ['content-type']);
 }
