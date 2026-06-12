@@ -5,4 +5,4 @@ pages_build_output_dir = "public"
 [[d1_databases]]
 binding = "DB"
 database_name = "airbeat-db"
-database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+database_id = "366c021e-77b9-481b-84dd-5ed94990f606"
