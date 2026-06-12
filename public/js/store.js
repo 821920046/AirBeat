@@ -92,3 +92,80 @@ export async function mergeLocal() {
   localStorage.removeItem('airbeat:favs');
   localStorage.removeItem('airbeat:pls');
 }
+
+export async function uploadWebDAV(url, userCred, passCred) {
+  const favs = await getFavorites();
+  const rawPls = await getPlaylists();
+  const pls = [];
+  for (const p of rawPls) {
+    const detail = await getPlaylist(p.id).catch(() => null);
+    if (detail) pls.push(detail);
+  }
+  const payload = {
+    exportedAt: new Date().toISOString(),
+    version: 1,
+    favorites: favs,
+    playlists: pls
+  };
+  const targetUrl = url.replace(/\/+$/, '') + '/airbeat_backup.json';
+  const authHeader = 'Basic ' + btoa(unescape(encodeURIComponent(userCred + ':' + passCred)));
+  
+  const r = await fetch(targetUrl, {
+    method: 'PUT',
+    headers: {
+      'Authorization': authHeader,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(payload, null, 2)
+  });
+  if (!r.ok) throw new Error('WebDAV 备份失败: HTTP ' + r.status);
+  localStorage.setItem('airbeat:webdav', JSON.stringify({ url, user: userCred, pass: passCred }));
+}
+
+export async function downloadWebDAV(url, userCred, passCred) {
+  const targetUrl = url.replace(/\/+$/, '') + '/airbeat_backup.json';
+  const authHeader = 'Basic ' + btoa(unescape(encodeURIComponent(userCred + ':' + passCred)));
+  
+  const r = await fetch(targetUrl, {
+    method: 'GET',
+    headers: {
+      'Authorization': authHeader
+    }
+  });
+  if (r.status === 404) throw new Error('云端未找到备份文件 (airbeat_backup.json)');
+  if (!r.ok) throw new Error('下载备份失败: HTTP ' + r.status);
+  
+  const data = await r.json();
+  if (!data.favorites && !data.playlists) throw new Error('备份文件格式不正确');
+  
+  // 合并逻辑
+  let importCount = 0;
+  if (data.favorites) {
+    for (const f of data.favorites) {
+      const currentFavs = await getFavorites();
+      if (!currentFavs.some((cur) => cur.source === f.source && cur.trackId === f.trackId)) {
+        await toggleFavorite(f).catch(() => {});
+      }
+    }
+  }
+  
+  if (data.playlists) {
+    for (const pl of data.playlists) {
+      const created = await createPlaylist(pl.name).catch(() => null);
+      if (created && pl.songs) {
+        for (const s of pl.songs) {
+          await addToPlaylist(created.id, s).catch(() => {});
+        }
+        importCount++;
+      }
+    }
+  }
+  localStorage.setItem('airbeat:webdav', JSON.stringify({ url, user: userCred, pass: passCred }));
+  return importCount;
+}
+
+export function getWebDAVConfig() {
+  try {
+    return JSON.parse(localStorage.getItem('airbeat:webdav')) || null;
+  } catch { return null; }
+}

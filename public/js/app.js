@@ -20,6 +20,30 @@ let pendingQuery = '';
 let currentPlId = null;
 let pickerTrack = null;
 let authMode = 'login';
+let lyricOffset = 0;
+const OFFSET_KEY = 'airbeat:lyric-offsets';
+
+function getLyricOffset(t) {
+  if (!t) return 0;
+  try {
+    const map = JSON.parse(localStorage.getItem(OFFSET_KEY)) || {};
+    return map[t.source + ':' + t.trackId] || 0;
+  } catch { return 0; }
+}
+
+function saveLyricOffset(t, offset) {
+  if (!t) return;
+  try {
+    const map = JSON.parse(localStorage.getItem(OFFSET_KEY)) || {};
+    map[t.source + ':' + t.trackId] = offset;
+    localStorage.setItem(OFFSET_KEY, JSON.stringify(map));
+  } catch {}
+}
+
+function updateOffsetUI() {
+  const el = $('#lyric-offset-val');
+  if (el) el.textContent = `歌词偏移: ${lyricOffset > 0 ? '+' : ''}${lyricOffset.toFixed(1)}s`;
+}
 
 const fmt = (s) => {
   s = Math.max(0, Math.floor(s || 0));
@@ -138,9 +162,11 @@ async function renderPlaylists() {
   view.innerHTML = `<h1>我的歌单</h1>` + skeletonGrid();
   const pls = await store.getPlaylists().catch(() => []);
   view.innerHTML = `<h1>我的歌单</h1>
-    <div class='searchbar' style='gap:8px;margin-bottom:18px'>
+    <div class='searchbar' style='gap:8px;margin-bottom:18px;max-width:none;flex-wrap:wrap;'>
       <button class='btn ghost' id='pl-export'>📤 导出歌单</button>
       <button class='btn ghost' id='pl-import'>📥 导入歌单</button>
+      <button class='btn ghost' id='pl-import-external'>🧩 导入网易/QQ歌单</button>
+      <button class='btn ghost' id='pl-webdav'>☁️ WebDAV 同步</button>
     </div>
     <form id='pl-form' class='searchbar glass'>
       <input id='pl-name' placeholder='新歌单名称…'>
@@ -155,6 +181,26 @@ async function renderPlaylists() {
       <button class='icon-btn small' data-act='rename' title='重命名'>✏️</button>
       <button class='icon-btn small' data-act='del' title='删除'>🗑</button>
     </div>`).join('') || `<p class='muted'>还没有歌单,在上方创建一个吧</p>`) + `</div>`;
+    
+  // 导入外部歌单弹窗
+  $('#pl-import-external').onclick = () => {
+    $('#import-external-error').textContent = '';
+    $('#import-external-url').value = '';
+    $('#import-external-modal').showModal();
+  };
+  
+  // WebDAV 弹窗
+  $('#pl-webdav').onclick = () => {
+    $('#webdav-error').textContent = '';
+    const cfg = store.getWebDAVConfig();
+    if (cfg) {
+      $('#webdav-url').value = cfg.url || '';
+      $('#webdav-user').value = cfg.user || '';
+      $('#webdav-pass').value = cfg.pass || '';
+    }
+    $('#webdav-modal').showModal();
+  };
+
   $('#pl-form').onsubmit = async (e) => {
     e.preventDefault();
     const name = $('#pl-name').value.trim();
@@ -342,13 +388,184 @@ function renderSources() {
   });
 }
 
+function updateSubsonicNav() {
+  const enabled = api.enabledSources();
+  const hasSubsonic = enabled.includes('subsonic');
+  const nav = $('#nav-subsonic');
+  if (nav) nav.style.display = hasSubsonic ? 'block' : 'none';
+}
+
+async function renderSubsonic(viewMode, targetId) {
+  const sub = api.allSources()['subsonic'];
+  if (!sub) {
+    view.innerHTML = `<h1>☁️ 自建曲库</h1><p class='muted'>未配置或未启用 Subsonic/Navidrome 音源，请前往「🧩 音源」页面配置</p>`;
+    return;
+  }
+  
+  // 专辑歌曲列表详情
+  if (viewMode === 'album' && targetId) {
+    view.innerHTML = `<h1>自建专辑详情</h1>` + skeletonGrid();
+    try {
+      const songs = await sub.getAlbumSongs(targetId);
+      groups = [songs];
+      view.innerHTML = `<h1>💿 专辑歌曲</h1>
+        <div style='margin-bottom:12px'><a href='#/subsonic' class='btn ghost small'>← 返回自建库</a></div>
+        <button class='btn' id='sub-playall' ${songs.length ? '' : 'disabled'}>▶ 播放全部(${songs.length})</button>
+        <div class='list' style='margin-top:16px'>` +
+        (songs.map((t, i) => trackRow(t, 0, i, 'remove-song-disabled')).join('') || `<p class='muted'>该专辑没有歌曲</p>`) + `</div>`;
+      $('#sub-playall').onclick = () => player.playQueue(groups[0], 0);
+      view.querySelectorAll("[data-act='remove-song-disabled']").forEach(btn => btn.remove());
+    } catch (err) {
+      view.innerHTML = `<p class='error'>加载专辑失败: ${err.message}</p>`;
+    }
+    return;
+  }
+  
+  // 歌单歌曲列表详情
+  if (viewMode === 'playlist' && targetId) {
+    view.innerHTML = `<h1>自建歌单详情</h1>` + skeletonGrid();
+    try {
+      const songs = await sub.getPlaylistSongs(targetId);
+      groups = [songs];
+      view.innerHTML = `<h1>📚 歌单歌曲</h1>
+        <div style='margin-bottom:12px'><a href='#/subsonic' class='btn ghost small'>← 返回自建库</a></div>
+        <button class='btn' id='sub-playall' ${songs.length ? '' : 'disabled'}>▶ 播放全部(${songs.length})</button>
+        <div class='list' style='margin-top:16px'>` +
+        (songs.map((t, i) => trackRow(t, 0, i, 'remove-song-disabled')).join('') || `<p class='muted'>该歌单为空</p>`) + `</div>`;
+      $('#sub-playall').onclick = () => player.playQueue(groups[0], 0);
+      view.querySelectorAll("[data-act='remove-song-disabled']").forEach(btn => btn.remove());
+    } catch (err) {
+      view.innerHTML = `<p class='error'>加载歌单失败: ${err.message}</p>`;
+    }
+    return;
+  }
+  
+  // 目录深度浏览
+  if (viewMode === 'browse') {
+    const dirId = targetId || '';
+    view.innerHTML = `<h1>自建库目录浏览</h1>` + skeletonGrid();
+    try {
+      const { dirs, songs } = await sub.browse(dirId);
+      groups = [songs];
+      
+      const dirHtml = dirs.map(d => `<div class='row glass' data-dir-id='${d.id}'>
+        <div class='row-cover'>📁</div>
+        <div class='row-main'><div class='row-title'>${esc(d.name)}</div></div>
+      </div>`).join('');
+      
+      const songHtml = songs.map((t, i) => trackRow(t, 0, i, 'remove-song-disabled')).join('');
+      
+      view.innerHTML = `<h1>📁 目录浏览</h1>
+        <div style='margin-bottom:12px'>
+          <a href='#/subsonic' class='btn ghost small'>← 返回自建库</a>
+          ${dirId ? `<button id='btn-dir-up' class='btn ghost small'>↑ 返回上级</button>` : ''}
+        </div>
+        <div class='list'>
+          ${dirHtml}
+          ${songHtml || (dirs.length ? '' : `<p class='muted'>该目录下没有任何内容</p>`)}
+        </div>`;
+      
+      view.querySelectorAll("[data-act='remove-song-disabled']").forEach(btn => btn.remove());
+      
+      view.querySelectorAll('[data-dir-id]').forEach(el => {
+        el.onclick = () => {
+          location.hash = `#/subsonic/browse/${el.dataset.dirId}`;
+        };
+      });
+      
+      const btnUp = $('#btn-dir-up');
+      if (btnUp) {
+        btnUp.onclick = () => history.back();
+      }
+    } catch (err) {
+      view.innerHTML = `<p class='error'>加载目录失败: ${err.message}</p>`;
+    }
+    return;
+  }
+  
+  // 首页：Tab 切换自建歌单与自建专辑
+  view.innerHTML = `<h1>☁️ 自建曲库</h1>
+    <div style='display:flex;gap:8px;margin-bottom:18px'>
+      <button class='btn' id='sub-tab-pls'>自建歌单</button>
+      <button class='btn ghost' id='sub-tab-albums'>最新专辑</button>
+      <a href='#/subsonic/browse' class='btn ghost'>浏览目录</a>
+    </div>
+    <div id='subsonic-container'>` + skeletonGrid() + `</div>`;
+    
+  const container = $('#subsonic-container');
+  
+  const loadPlaylists = async () => {
+    container.innerHTML = skeletonGrid();
+    try {
+      const pls = await sub.getPlaylists();
+      container.innerHTML = pls.length
+        ? `<div class='list'>` + pls.map(p => `<div class='row glass' data-sub-pl-id='${p.id}'>
+            <div class='row-cover'>📚</div>
+            <div class='row-main'>
+              <div class='row-title'>${esc(p.name)}</div>
+              <div class='muted' style='font-size:12px'>${p.songCount} 首歌曲</div>
+            </div>
+          </div>`).join('') + `</div>`
+        : `<p class='muted'>你在自建库中还没有创建过歌单</p>`;
+      
+      container.querySelectorAll('[data-sub-pl-id]').forEach(el => {
+        el.onclick = () => {
+          location.hash = `#/subsonic/playlist/${el.dataset.subPlId}`;
+        };
+      });
+    } catch (err) {
+      container.innerHTML = `<p class='error'>加载歌单失败: ${err.message}</p>`;
+    }
+  };
+  
+  const loadAlbums = async () => {
+    container.innerHTML = skeletonGrid();
+    try {
+      const albums = await sub.getAlbums();
+      container.innerHTML = albums.length
+        ? `<div class='grid'>` + albums.map(a => `<div class='card glass' data-sub-alb-id='${a.id}'>
+            <div class='cover-wrap'>${a.cover ? `<img loading='lazy' src='${esc(a.cover)}'>` : '💿'}</div>
+            <div class='card-title' title='${esc(a.name)}'>${esc(a.name)}</div>
+            <div class='card-artist'>${esc(a.artist)}</div>
+          </div>`).join('') + `</div>`
+        : `<p class='muted'>未找到专辑</p>`;
+        
+      container.querySelectorAll('[data-sub-alb-id]').forEach(el => {
+        el.onclick = () => {
+          location.hash = `#/subsonic/album/${el.dataset.subAlbId}`;
+        };
+      });
+    } catch (err) {
+      container.innerHTML = `<p class='error'>加载专辑失败: ${err.message}</p>`;
+    }
+  };
+  
+  $('#sub-tab-pls').onclick = () => {
+    $('#sub-tab-pls').classList.remove('ghost');
+    $('#sub-tab-albums').classList.add('ghost');
+    loadPlaylists();
+  };
+  
+  $('#sub-tab-albums').onclick = () => {
+    $('#sub-tab-pls').classList.add('ghost');
+    $('#sub-tab-albums').classList.remove('ghost');
+    loadAlbums();
+  };
+  
+  loadPlaylists();
+}
+
 const routes = { discover: renderDiscover, search: renderSearch, radio: renderRadio, recognize: renderRecognize, playlists: renderPlaylists, favorites: renderFavorites, recent: renderRecent, sources: renderSources };
 
 function route() {
   const hash = location.hash.slice(2) || 'discover';
-  const [name, arg] = hash.split('/');
+  const [name, arg1, arg2] = hash.split('/');
+  
+  updateSubsonicNav();
+  
   document.querySelectorAll('.sidebar nav a').forEach((a) => a.classList.toggle('active', a.dataset.route === name));
-  if (name === 'playlist' && arg) return renderPlaylistDetail(arg);
+  if (name === 'playlist' && arg1) return renderPlaylistDetail(arg1);
+  if (name === 'subsonic') return renderSubsonic(arg1, arg2);
   (routes[name] || renderDiscover)();
 }
 window.addEventListener('hashchange', route);
@@ -413,6 +630,102 @@ $('#picker-create').onclick = async () => {
   toast('已创建并加入');
 };
 
+// 导入外部歌单
+$('#import-external-close').onclick = () => $('#import-external-modal').close();
+$('#import-external-form').onsubmit = async (e) => {
+  e.preventDefault();
+  const errEl = $('#import-external-error');
+  errEl.textContent = '';
+  const url = $('#import-external-url').value.trim();
+  if (!url) return;
+  const submitBtn = $('#import-external-submit');
+  submitBtn.disabled = true;
+  submitBtn.textContent = '解析中…';
+  
+  try {
+    const r = await fetch('/api/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url })
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || '解析失败');
+    
+    const pl = await store.createPlaylist(data.name);
+    for (const song of data.songs) {
+      await store.addToPlaylist(pl.id, song).catch(() => {});
+    }
+    
+    toast(`已导入歌单「${data.name}」，含 ${data.songs.length} 首歌曲`);
+    $('#import-external-modal').close();
+    renderPlaylists();
+  } catch (err) {
+    errEl.textContent = err.message;
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = '解析并导入';
+  }
+};
+
+// WebDAV 备份同步
+$('#webdav-close').onclick = () => $('#webdav-modal').close();
+$('#webdav-upload').onclick = async () => {
+  const url = $('#webdav-url').value.trim();
+  const userCred = $('#webdav-user').value.trim();
+  const passCred = $('#webdav-pass').value;
+  const errEl = $('#webdav-error');
+  errEl.textContent = '';
+  
+  if (!url || !userCred || !passCred) {
+    errEl.textContent = '请完整填写配置信息';
+    return;
+  }
+  
+  const btn = $('#webdav-upload');
+  btn.disabled = true;
+  btn.textContent = '上传中…';
+  try {
+    await store.uploadWebDAV(url, userCred, passCred);
+    toast('备份上传成功！');
+    $('#webdav-modal').close();
+  } catch (err) {
+    errEl.textContent = err.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '上传备份';
+  }
+};
+
+$('#webdav-download').onclick = async () => {
+  const url = $('#webdav-url').value.trim();
+  const userCred = $('#webdav-user').value.trim();
+  const passCred = $('#webdav-pass').value;
+  const errEl = $('#webdav-error');
+  errEl.textContent = '';
+  
+  if (!url || !userCred || !passCred) {
+    errEl.textContent = '请完整填写配置信息';
+    return;
+  }
+  
+  if (!confirm('从云端下载同步将合并数据，是否继续？')) return;
+  
+  const btn = $('#webdav-download');
+  btn.disabled = true;
+  btn.textContent = '下载中…';
+  try {
+    const importCount = await store.downloadWebDAV(url, userCred, passCred);
+    toast(`同步完成！导入了 ${importCount} 个歌单，并合并了收藏列表。`);
+    $('#webdav-modal').close();
+    renderPlaylists();
+  } catch (err) {
+    errEl.textContent = err.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '下载同步';
+  }
+};
+
 $('#auth-switch').onclick = () => {
   authMode = authMode === 'login' ? 'register' : 'login';
   $('#auth-title').textContent = authMode === 'login' ? '登录' : '注册';
@@ -459,13 +772,14 @@ audio.addEventListener('timeupdate', () => {
   $('#t-cur').textContent = fmt(audio.currentTime);
   $('#t-dur').textContent = fmt(audio.duration);
   syncLyrics();
+  if (audio.duration) player.checkPreload(audio.currentTime, audio.duration);
 });
 seek.addEventListener('input', () => { seeking = true; });
 seek.addEventListener('change', () => {
   if (audio.duration) audio.currentTime = (seek.value / 1000) * audio.duration;
   seeking = false;
 });
-$('#volume').oninput = (e) => { audio.volume = e.target.value / 100; };
+$('#volume').oninput = (e) => { player.setVolume(e.target.value / 100); };
 $('#btn-play').onclick = () => player.toggle();
 $('#btn-prev').onclick = () => player.prev();
 $('#btn-next').onclick = () => player.next();
@@ -535,12 +849,24 @@ function setAccentFrom(src) {
   img.onload = () => {
     try {
       const c = document.createElement('canvas');
-      c.width = c.height = 1;
+      c.width = c.height = 2;
       const x = c.getContext('2d');
-      x.drawImage(img, 0, 0, 1, 1);
-      const d = x.getImageData(0, 0, 1, 1).data;
-      document.documentElement.style.setProperty('--accent', `rgb(${d[0]},${d[1]},${d[2]})`);
-    } catch { /* 跨域受限时保持默认主题色 */ }
+      x.drawImage(img, 0, 0, 2, 2);
+      const d = x.getImageData(0, 0, 2, 2).data;
+      const c1 = `rgb(${d[0]},${d[1]},${d[2]})`;
+      const c2 = `rgb(${d[4]},${d[5]},${d[6]})`;
+      const c3 = `rgb(${d[8]},${d[9]},${d[10]})`;
+      document.documentElement.style.setProperty('--accent', c1);
+      document.documentElement.style.setProperty('--glow1', c1);
+      document.documentElement.style.setProperty('--glow2', c2);
+      document.documentElement.style.setProperty('--glow3', c3);
+    } catch {
+      // 跨域受限时从当前 --accent 变换颜色
+      const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#8b5cf6';
+      document.documentElement.style.setProperty('--glow1', accent);
+      document.documentElement.style.setProperty('--glow2', '#0c1b3a');
+      document.documentElement.style.setProperty('--glow3', '#1a1330');
+    }
   };
 }
 
@@ -562,7 +888,8 @@ async function loadLyrics(t) {
 
 function syncLyrics() {
   if (!lyricLines.length || fs.classList.contains('hidden')) return;
-  const i = currentLine(lyricLines, audio.currentTime);
+  const curTime = audio.currentTime + lyricOffset;
+  const i = currentLine(lyricLines, curTime);
   if (i === lyricIdx) return;
   lyricIdx = i;
   document.querySelectorAll('#fs-lyrics p').forEach((p) => p.classList.remove('active'));
@@ -574,6 +901,19 @@ function syncLyrics() {
 }
 
 function onTrack(t) {
+  if (!t) {
+    $('#pb-cover').src = '';
+    $('#pb-cover').style.visibility = 'hidden';
+    $('#pb-title').textContent = '未在播放';
+    $('#pb-artist').textContent = '';
+    $('#fs-cover').src = '';
+    $('#fs-title').textContent = '';
+    $('#fs-artist').textContent = '';
+    document.title = 'AirBeat · 在线音乐播放器';
+    $('#fs-lyrics').innerHTML = `<p class='muted'>暂无歌词</p>`;
+    if ($('#queue-drawer').classList.contains('show')) renderQueueList();
+    return;
+  }
   $('#pb-cover').src = t.cover || '';
   $('#pb-cover').style.visibility = t.cover ? 'visible' : 'hidden';
   $('#pb-title').textContent = t.title;
@@ -583,7 +923,10 @@ function onTrack(t) {
   $('#fs-artist').textContent = t.artist || '';
   document.title = t.title + ' · AirBeat';
   setAccentFrom(t.cover ? api.streamUrl(t.cover) : '');
+  lyricOffset = getLyricOffset(t);
+  updateOffsetUI();
   loadLyrics(t);
+  if ($('#queue-drawer').classList.contains('show')) renderQueueList();
 }
 
 const savedTheme = localStorage.getItem('airbeat:theme');
@@ -594,25 +937,112 @@ $('#theme-toggle').onclick = () => {
   localStorage.setItem('airbeat:theme', t);
 };
 
+// 歌词偏移微调事件绑定
+$('#lyric-offset-dec').onclick = () => {
+  lyricOffset -= 0.5;
+  updateOffsetUI();
+  saveLyricOffset(player.current(), lyricOffset);
+  // 清空 lyricIdx 强迫 syncLyrics 重新计算滚动
+  lyricIdx = -1;
+  syncLyrics();
+};
+$('#lyric-offset-inc').onclick = () => {
+  lyricOffset += 0.5;
+  updateOffsetUI();
+  saveLyricOffset(player.current(), lyricOffset);
+  lyricIdx = -1;
+  syncLyrics();
+};
+$('#lyric-offset-reset').onclick = () => {
+  lyricOffset = 0;
+  updateOffsetUI();
+  saveLyricOffset(player.current(), lyricOffset);
+  lyricIdx = -1;
+  syncLyrics();
+};
+
+/* ==================== 播放队列抽屉 (Queue Drawer) 逻辑 ==================== */
+function renderQueueList() {
+  const q = player.getQueue();
+  const currentIdx = player.getIndex();
+  const listEl = $('#queue-list');
+  if (!listEl) return;
+  
+  listEl.innerHTML = q.map((t, i) => {
+    const isActive = i === currentIdx;
+    return `<div class='queue-item ${isActive ? 'active' : ''}' data-q-idx='${i}'>
+      <div class='queue-item-main'>
+        <div class='queue-title' title='${esc(t.title)}'>${esc(t.title)}</div>
+        <div class='queue-artist'>${esc(t.artist || '')} · ${esc(t.source)}</div>
+      </div>
+      <button class='icon-btn small' data-queue-act='remove' data-q-idx='${i}' title='移除'>✕</button>
+    </div>`;
+  }).join('') || `<p class='muted' style='text-align:center;padding:20px 0;font-size:12px;'>队列为空</p>`;
+  
+  // 绑定点击列表项切歌
+  listEl.querySelectorAll('.queue-item').forEach((el) => {
+    el.onclick = (e) => {
+      if (e.target.closest('[data-queue-act="remove"]')) return;
+      const idx = +el.dataset.qIdx;
+      player.setIndex(idx);
+    };
+  });
+  
+  // 绑定删除按钮
+  listEl.querySelectorAll('[data-queue-act="remove"]').forEach((btn) => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      const idx = +btn.dataset.qIdx;
+      player.removeFromQueue(idx);
+      renderQueueList();
+    };
+  });
+}
+
+$('#btn-queue').onclick = (e) => {
+  e.stopPropagation();
+  const drawer = $('#queue-drawer');
+  drawer.classList.toggle('show');
+  if (drawer.classList.contains('show')) {
+    renderQueueList();
+  }
+};
+$('#queue-close').onclick = () => {
+  $('#queue-drawer').classList.remove('show');
+};
+$('#queue-clear').onclick = () => {
+  if (confirm('确定清空播放队列？')) {
+    player.clearQueue();
+    renderQueueList();
+    $('#queue-drawer').classList.remove('show');
+  }
+};
+// 点击抽屉外部自动关闭抽屉
+document.addEventListener('click', (e) => {
+  const drawer = $('#queue-drawer');
+  if (drawer.classList.contains('show') && !e.target.closest('#queue-drawer') && !e.target.closest('#btn-queue')) {
+    drawer.classList.remove('show');
+  }
+});
+
 /* ==================== 键盘快捷键 ==================== */
 document.addEventListener('keydown', (e) => {
-  // 不在输入框中触发快捷键
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
   switch (e.key) {
     case ' ': e.preventDefault(); player.toggle(); break;
     case 'ArrowLeft': e.preventDefault(); audio.currentTime = Math.max(0, audio.currentTime - 5); break;
     case 'ArrowRight': e.preventDefault(); audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + 5); break;
-    case 'ArrowUp': e.preventDefault(); { const v = Math.min(1, audio.volume + 0.05); audio.volume = v; $('#volume').value = Math.round(v * 100); } break;
-    case 'ArrowDown': e.preventDefault(); { const v = Math.max(0, audio.volume - 0.05); audio.volume = v; $('#volume').value = Math.round(v * 100); } break;
+    case 'ArrowUp': e.preventDefault(); { const v = Math.min(1, player.getVolume() + 0.05); player.setVolume(v); $('#volume').value = Math.round(v * 100); } break;
+    case 'ArrowDown': e.preventDefault(); { const v = Math.max(0, player.getVolume() - 0.05); player.setVolume(v); $('#volume').value = Math.round(v * 100); } break;
   }
 });
 
 (async function init() {
-  // 注册 Service Worker (PWA)
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js').catch(() => {});
   }
-  audio.volume = 0.8;
+  player.setVolume(0.8);
+  $('#volume').value = 80;
   player.onTrackChange(onTrack);
   const u = await auth.me().catch(() => null);
   if (u) store.setUser(u);

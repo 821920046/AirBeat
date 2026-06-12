@@ -134,6 +134,66 @@ function buildSubsonicAdapter(cfg) {
       }));
       return { dirs, songs };
     },
+    getPlaylists: async () => {
+      const url = base + '/getPlaylists?' + makeParams();
+      const r = await fetch('/api/proxy/stream?url=' + encodeURIComponent(url));
+      if (!r.ok) throw new Error('subsonic getPlaylists ' + r.status);
+      const j = await r.json();
+      const list = j['subsonic-response']?.playlists?.playlist || [];
+      return (Array.isArray(list) ? list : [list]).filter(p => p && p.id).map(p => ({
+        id: String(p.id),
+        name: p.name || '未命名歌单',
+        songCount: p.songCount || 0
+      }));
+    },
+    getPlaylistSongs: async (id) => {
+      const url = base + '/getPlaylist?' + makeParams({ id: String(id) });
+      const r = await fetch('/api/proxy/stream?url=' + encodeURIComponent(url));
+      if (!r.ok) throw new Error('subsonic getPlaylist ' + r.status);
+      const j = await r.json();
+      const songs = j['subsonic-response']?.playlist?.entry || [];
+      return (Array.isArray(songs) ? songs : [songs]).filter(s => s && s.id).map(s => ({
+        source: 'subsonic',
+        trackId: String(s.id),
+        title: s.title || '未知标题',
+        artist: s.artist || '',
+        cover: s.coverArt ? base + '/getCoverArt?' + makeParams({ id: s.coverArt }) : '',
+        audioUrl: base + '/stream?' + makeParams({ id: s.id }),
+        duration: s.duration || 0,
+        album: s.album || ''
+      }));
+    },
+    getAlbums: async (type = 'newest', size = 20) => {
+      const url = base + '/getAlbumList2?' + makeParams({ type, size: String(size) });
+      const r = await fetch('/api/proxy/stream?url=' + encodeURIComponent(url));
+      if (!r.ok) throw new Error('subsonic getAlbumList2 ' + r.status);
+      const j = await r.json();
+      const albums = j['subsonic-response']?.albumList2?.album || [];
+      return (Array.isArray(albums) ? albums : [albums]).filter(a => a && a.id).map(a => ({
+        id: String(a.id),
+        name: a.name || '未知专辑',
+        artist: a.artist || '',
+        cover: a.coverArt ? base + '/getCoverArt?' + makeParams({ id: a.coverArt }) : '',
+        songCount: a.songCount || 0
+      }));
+    },
+    getAlbumSongs: async (id) => {
+      const url = base + '/getAlbum?' + makeParams({ id: String(id) });
+      const r = await fetch('/api/proxy/stream?url=' + encodeURIComponent(url));
+      if (!r.ok) throw new Error('subsonic getAlbum ' + r.status);
+      const j = await r.json();
+      const songs = j['subsonic-response']?.album?.song || [];
+      return (Array.isArray(songs) ? songs : [songs]).filter(s => s && s.id).map(s => ({
+        source: 'subsonic',
+        trackId: String(s.id),
+        title: s.title || '未知标题',
+        artist: s.artist || '',
+        cover: s.coverArt ? base + '/getCoverArt?' + makeParams({ id: s.coverArt }) : '',
+        audioUrl: base + '/stream?' + makeParams({ id: s.id }),
+        duration: s.duration || 0,
+        album: s.album || ''
+      }));
+    }
   };
 }
 

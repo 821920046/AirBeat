@@ -20,6 +20,7 @@
       <a href='#/playlists' data-route='playlists'>📚 我的歌单</a>
       <a href='#/favorites' data-route='favorites'>❤️ 收藏</a>
       <a href='#/recent' data-route='recent'>🕐 最近播放</a>
+      <a href='#/subsonic' id='nav-subsonic' data-route='subsonic' style='display:none'>☁️ 自建曲库</a>
       <a href='#/sources' data-route='sources'>🧩 音源</a>
     </nav>
     <div class='sidebar-bottom'>
@@ -52,10 +53,18 @@
       <span id='t-dur'>0:00</span>
     </div>
   </div>
-  <div class='pb-right'>🔊 <input type='range' id='volume' min='0' max='100' value='80'></div>
+  <div class='pb-right'>
+    <button id='btn-queue' class='icon-btn' title='播放队列'>🎶</button>
+    🔊 <input type='range' id='volume' min='0' max='100' value='80'>
+  </div>
 </footer>
 
 <section id='fullscreen' class='hidden'>
+  <div class='fs-bg-glow-container'>
+    <div class='fs-bg-glow glow-1'></div>
+    <div class='fs-bg-glow glow-2'></div>
+    <div class='fs-bg-glow glow-3'></div>
+  </div>
   <button id='fs-close' class='icon-btn'>▼</button>
   <canvas id='fs-canvas'></canvas>
   <div class='fs-content'>
@@ -66,7 +75,15 @@
       <button id='viz-style' class='btn ghost'>切换可视化样式</button>
       <button id='eq-toggle' class='btn ghost'>均衡器</button>
     </div>
-    <div class='fs-lyrics' id='fs-lyrics'><p class='muted'>暂无歌词</p></div>
+    <div class='fs-right'>
+      <div class='lyrics-control'>
+        <button id='lyric-offset-dec' class='btn ghost' title='歌词推迟 0.5 秒'>⏰ -0.5s</button>
+        <span id='lyric-offset-val' class='muted'>歌词偏移: 0.0s</span>
+        <button id='lyric-offset-inc' class='btn ghost' title='歌词提前 0.5 秒'>⏰ +0.5s</button>
+        <button id='lyric-offset-reset' class='btn ghost' title='重置偏移'>重置</button>
+      </div>
+      <div class='fs-lyrics' id='fs-lyrics'><p class='muted'>暂无歌词</p></div>
+    </div>
   </div>
   <div id='eq-panel' class='eq-panel glass hidden'>
     <div class='eq-header'>
@@ -106,6 +123,45 @@
     <button class='btn ghost' type='submit'>取消</button>
   </form>
 </dialog>
+
+<dialog id='webdav-modal' class='glass'>
+  <h3>WebDAV 云备份同步</h3>
+  <form id='webdav-form'>
+    <p class='muted' style='font-size:11px;line-height:1.4'>将你的个人数据（收藏、歌单）同步至 WebDAV 网盘。注：坚果云需使用专用的应用密码。</p>
+    <input id='webdav-url' type='url' placeholder='服务器地址(例: https://dav.jianguoyun.com/dav/)' required autocomplete='on'>
+    <input id='webdav-user' type='text' placeholder='用户名' required autocomplete='on'>
+    <input id='webdav-pass' type='password' placeholder='应用密码/Token' required>
+    <div style='display:flex;gap:8px;margin-top:6px'>
+      <button class='btn' type='button' id='webdav-upload' style='flex:1'>上传备份</button>
+      <button class='btn' type='button' id='webdav-download' style='flex:1'>下载同步</button>
+    </div>
+    <p id='webdav-error' class='error' style='margin:4px 0'></p>
+    <button class='btn ghost' type='button' id='webdav-close'>关闭</button>
+  </form>
+</dialog>
+
+<dialog id='import-external-modal' class='glass'>
+  <h3>导入外部歌单</h3>
+  <form id='import-external-form'>
+    <p class='muted' style='font-size:11px;line-height:1.4'>输入网易云音乐或 QQ 音乐的公开歌单分享链接，或直接输入网易云歌单 ID。</p>
+    <input id='import-external-url' type='text' placeholder='粘贴分享链接或网易云歌单ID...' required autocomplete='off'>
+    <p id='import-external-error' class='error' style='margin:4px 0'></p>
+    <button class='btn' type='submit' id='import-external-submit'>解析并导入</button>
+    <button class='btn ghost' type='button' id='import-external-close'>取消</button>
+  </form>
+</dialog>
+
+<!-- 播放队列抽屉 -->
+<div id='queue-drawer' class='queue-drawer glass'>
+  <div class='queue-header'>
+    <h3>播放队列</h3>
+    <div style='display:flex;gap:6px;align-items:center'>
+      <button id='queue-clear' class='btn ghost small' style='padding:4px 10px;font-size:11px'>清空</button>
+      <button id='queue-close' class='icon-btn small'>✕</button>
+    </div>
+  </div>
+  <div id='queue-list' class='queue-list'></div>
+</div>
 
 <audio id='audio' crossorigin='anonymous' preload='auto'></audio>
 <script type='module' src='/js/app.js'></script>
