@@ -1,5 +1,9 @@
 # AirBeat 在线音乐播放器
 
+<p align="center">
+  <img src="airbeat_logo.png" alt="AirBeat Logo" width="120" style="border-radius: 24px;">
+</p>
+
 免费在线音乐播放器，基于 **Cloudflare Pages + Pages Functions + D1** 全家桶构建，零服务器成本、零 npm 依赖。
 
 ## 功能特性
