@@ -201,7 +201,6 @@ const AUDIUS_BASE = 'https://discoveryprovider.audius.co/v1';
 
 const mapJamendo = (t) => ({ source: 'jamendo', trackId: t.id, title: t.name, artist: t.artist_name, cover: t.image, audioUrl: t.audio, duration: +t.duration || 0 });
 const mapAudius = (t) => ({ source: 'audius', trackId: t.id, title: t.title, artist: t.user && t.user.name, cover: t.artwork && (t.artwork['480x480'] || t.artwork['150x150']), audioUrl: AUDIUS_BASE + '/tracks/' + t.id + '/stream?app_name=airbeat', duration: t.duration || 0 });
-const mapItunes = (t) => ({ source: 'itunes', trackId: t.trackId, title: t.trackName, artist: t.artistName, cover: (t.artworkUrl100 || '').replace('100x100', '600x600'), audioUrl: t.previewUrl, duration: 30 });
 const mapDeezer = (t) => ({ source: 'deezer', trackId: t.id, title: t.title, artist: t.artist && t.artist.name, cover: t.album && (t.album.cover_xl || t.album.cover_big), audioUrl: t.preview, duration: 30 });
 const mapArchive = (d) => ({ source: 'archive', trackId: d.identifier, title: d.title || d.identifier, artist: Array.isArray(d.creator) ? d.creator[0] : (d.creator || 'Internet Archive'), cover: 'https://archive.org/services/img/' + d.identifier, audioUrl: '', duration: 0 });
 const mapRadio = (s) => ({ source: 'radio', trackId: s.stationuuid, title: s.name, artist: (s.country || '') + (s.tags ? ' · ' + s.tags.split(',')[0] : ''), cover: s.favicon, audioUrl: s.url_resolved, duration: 0 });
@@ -221,10 +220,6 @@ export const adapters = {
     label: 'Deezer · 30s 试听',
     search: async (q) => (((await get('deezer/search?limit=12&q=' + encodeURIComponent(q))).data) || []).map(mapDeezer),
     trending: async () => (((await get('deezer/chart/0/tracks?limit=12')).data) || []).map(mapDeezer),
-  },
-  itunes: {
-    label: 'iTunes · 30s 试听',
-    search: async (q) => (((await get('itunes/search?media=music&limit=12&term=' + encodeURIComponent(q))).results) || []).filter((t) => t.previewUrl).map(mapItunes),
   },
   archive: {
     label: 'Internet Archive · 公有领域',
