@@ -29,7 +29,7 @@ async function cachedFetch(key, fetcher, ttl = 300) {
     const res = await fetcher();
     if (res.ok) {
       try {
-        const toCache = new Response(res.body, res);
+        const toCache = res.clone();
         toCache.headers.set('Cache-Control', 'public, max-age=' + ttl);
         await cache.put(key, toCache);
       } catch { /* 缓存写入失败不阻塞响应 */ }
