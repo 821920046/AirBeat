@@ -27,13 +27,13 @@ async function cachedFetch(key, fetcher, ttl = 300) {
   } catch { /* 缓存读取失败，继续请求 */ }
   try {
     const res = await fetcher();
-    if (res.ok) {
-      try {
-        const toCache = res.clone();
-        toCache.headers.set('Cache-Control', 'public, max-age=' + ttl);
-        await cache.put(key, toCache);
-      } catch { /* 缓存写入失败不阻塞响应 */ }
-    }
+    try {
+      // 缓存所有响应：200 用长 TTL，429/403 短 TTL 防重复撞墙，5xx 更短
+      const cacheTtl = res.ok ? ttl : (res.status === 429 || res.status === 403 ? 120 : 30);
+      const toCache = res.clone();
+      toCache.headers.set('Cache-Control', 'public, max-age=' + cacheTtl);
+      await cache.put(key, toCache);
+    } catch { /* 缓存写入失败不阻塞响应 */ }
     return res;
   } catch (err) {
     // 上游请求失败（DNS 解析失败 / 连接超时）→ 返回 502 而不是让整个请求 500
