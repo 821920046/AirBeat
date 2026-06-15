@@ -1,7 +1,6 @@
 const SOURCES = {
   jamendo: 'https://api.jamendo.com/v3.0',
   audius: 'https://discoveryprovider.audius.co/v1',
-  deezer: 'https://api.deezer.com',
   archive: 'https://archive.org',
   radio: 'https://de1.api.radio-browser.info/json',
   lrclib: 'https://lrclib.net/api',

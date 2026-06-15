@@ -321,7 +321,6 @@ wrangler pages dev public
 |------|------|------|------------|
 | Jamendo | CC 授权曲库 | 70 万+独立音乐人作品 | `JAMENDO_CLIENT_ID` |
 | Audius | 独立音乐 | Web3 音乐平台 | 无 |
-| Deezer | 30s 试听 | 全球最大流媒体之一 | 无 |
 | Internet Archive | 公有领域 | 历史录音、古典等 | 无 |
 | Radio Browser | 全球电台 | 3 万+在线广播电台 | 无 |
 | **Spotify** | 全球流媒体（A类） | 全球最大流媒体，30s preview，无 preview 时自动跨源回退 | `SPOTIFY_CLIENT_ID` + `SPOTIFY_CLIENT_SECRET` |
