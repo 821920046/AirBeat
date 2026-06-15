@@ -318,13 +318,18 @@ wrangler pages dev public
 ## 音源列表
 
 | 音源 | 类型 | 说明 | 需要配置 |
-|------|------|------|----------|
+|------|------|------|------------|
 | Jamendo | CC 授权曲库 | 70 万+独立音乐人作品 | `JAMENDO_CLIENT_ID` |
 | Audius | 独立音乐 | Web3 音乐平台 | 无 |
 | Deezer | 30s 试听 | 全球最大流媒体之一 | 无 |
-| iTunes | 30s 试听 | Apple Music 试听 | 无 |
 | Internet Archive | 公有领域 | 历史录音、古典等 | 无 |
 | Radio Browser | 全球电台 | 3 万+在线广播电台 | 无 |
+| **Spotify** | 全球流媒体（A类） | 全球最大流媒体，30s preview，无 preview 时自动跨源回退 | `SPOTIFY_CLIENT_ID` + `SPOTIFY_CLIENT_SECRET` |
+| **Last.fm** | 音乐图谱（A类） | 全球最大音乐社交平台，元数据 + 跨源回退 | `LASTFM_API_KEY` |
+| **MusicBrainz** | 开放数据库（A类） | 开放音乐数据库，无需 Key，用作元数据补全 | 无 |
+| **JioSaavn** | 完整播放源（B类） | 提供完整音频直链，印度曲库为主 | 无 |
+| **网易云音乐** | 中文曲库（B类，非官方） | 中文曲库丰富，无直链自动跨源回退 | 无 |
+| **QQ音乐** | 中文曲库（B类，非官方） | 中文曲库最大，无直链自动跨源回退 | 无 |
 | 自定义 API | 用户自定义 | 任何 REST API | 按需 |
 | Subsonic | 自建曲库 | Navidrome/Airsonic/Gonic 等 | 服务端地址+账号 |
 
@@ -337,6 +342,9 @@ wrangler pages dev public
 | `JWT_SECRET` | **是** | — | JWT 签名密钥，至少 32 字符随机字符串 |
 | `JAMENDO_CLIENT_ID` | 推荐 | — | Jamendo API 密钥，不填则 Jamendo 不可用 |
 | `AUDD_KEY` | 可选 | — | AudD 听歌识曲 API 密钥 |
+| `SPOTIFY_CLIENT_ID` | 可选 | — | Spotify App Client ID，[开发者控制台](https://developer.spotify.com/dashboard) 免费注册获取 |
+| `SPOTIFY_CLIENT_SECRET` | 可选 | — | Spotify App Client Secret，与 Client ID 配套 |
+| `LASTFM_API_KEY` | 可选 | — | Last.fm API Key，[申请地址](https://www.last.fm/api/account/create) 免费注册获取 |
 
 ---
 

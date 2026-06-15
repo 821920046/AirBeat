@@ -199,12 +199,97 @@ function buildSubsonicAdapter(cfg) {
 
 const AUDIUS_BASE = 'https://discoveryprovider.audius.co/v1';
 
+// ─────────────── 数据映射器 ───────────────
 const mapJamendo = (t) => ({ source: 'jamendo', trackId: t.id, title: t.name, artist: t.artist_name, cover: t.image, audioUrl: t.audio, duration: +t.duration || 0 });
 const mapAudius = (t) => ({ source: 'audius', trackId: t.id, title: t.title, artist: t.user && t.user.name, cover: t.artwork && (t.artwork['480x480'] || t.artwork['150x150']), audioUrl: AUDIUS_BASE + '/tracks/' + t.id + '/stream?app_name=airbeat', duration: t.duration || 0 });
 const mapDeezer = (t) => ({ source: 'deezer', trackId: t.id, title: t.title, artist: t.artist && t.artist.name, cover: t.album && (t.album.cover_xl || t.album.cover_big), audioUrl: t.preview, duration: 30 });
 const mapArchive = (d) => ({ source: 'archive', trackId: d.identifier, title: d.title || d.identifier, artist: Array.isArray(d.creator) ? d.creator[0] : (d.creator || 'Internet Archive'), cover: 'https://archive.org/services/img/' + d.identifier, audioUrl: '', duration: 0 });
 const mapRadio = (s) => ({ source: 'radio', trackId: s.stationuuid, title: s.name, artist: (s.country || '') + (s.tags ? ' · ' + s.tags.split(',')[0] : ''), cover: s.favicon, audioUrl: s.url_resolved, duration: 0 });
 
+/** Spotify 曲目映射 — 使用 30s preview_url，无 preview 则 audioUrl 为空（依赖跨源回退） */
+const mapSpotify = (t) => ({
+  source: 'spotify',
+  trackId: t.id,
+  title: t.name,
+  artist: (t.artists || []).map(a => a.name).join(', '),
+  cover: t.album && t.album.images && (t.album.images[0]?.url || ''),
+  audioUrl: t.preview_url || '',
+  duration: t.preview_url ? 30 : Math.round((t.duration_ms || 0) / 1000),
+  album: t.album?.name || '',
+});
+
+/** Last.fm 曲目映射 — 无音频直链，依赖跨源回退 */
+const mapLastfm = (t) => ({
+  source: 'lastfm',
+  trackId: t.mbid || (t.artist?.mbid + ':' + t.name),
+  title: t.name,
+  artist: typeof t.artist === 'string' ? t.artist : (t.artist?.name || ''),
+  cover: (t.image || []).find(i => i.size === 'extralarge')?.['#text'] ||
+         (t.image || []).slice(-1)[0]?.['#text'] || '',
+  audioUrl: '', // Last.fm 无直链，触发跨源回退
+  duration: +t.duration || 0,
+});
+
+/** MusicBrainz 曲目映射 — 无音频直链，作为元数据补全源 */
+const mapMusicBrainz = (r) => ({
+  source: 'musicbrainz',
+  trackId: r.id,
+  title: r.title,
+  artist: (r['artist-credit'] || []).map(a => a.artist?.name || a.name || '').filter(Boolean).join(', '),
+  cover: '',  // MusicBrainz 无封面（需额外请求 CAA），置空触发默认图标
+  audioUrl: '', // 无直链，触发跨源回退
+  duration: r.length ? Math.round(r.length / 1000) : 0,
+});
+
+/** JioSaavn 曲目映射 — 有完整播放 URL */
+const mapJioSaavn = (s) => {
+  // 下载链接：优先 320kbps > 160kbps > 96kbps
+  const downloadUrls = s.downloadUrl || [];
+  const best = downloadUrls.find(u => u.quality === '320kbps') ||
+               downloadUrls.find(u => u.quality === '160kbps') ||
+               downloadUrls[downloadUrls.length - 1];
+  return {
+    source: 'jiosaavn',
+    trackId: s.id,
+    title: s.name || s.title || '未知标题',
+    artist: Array.isArray(s.artists?.primary)
+      ? s.artists.primary.map(a => a.name).join(', ')
+      : (s.primaryArtists || s.subtitle || ''),
+    cover: s.image?.find?.(i => i.quality === '500x500')?.url ||
+           (Array.isArray(s.image) ? s.image.slice(-1)[0]?.url : s.image) || '',
+    audioUrl: best?.url || '',
+    duration: +s.duration || 0,
+  };
+};
+
+/** 网易云音乐曲目映射 */
+const mapNetease = (s) => ({
+  source: 'netease',
+  trackId: String(s.id),
+  title: s.name || '未知标题',
+  artist: (s.ar || s.artists || []).map(a => a.name).join(', '),
+  cover: (s.al || s.album)?.picUrl || (s.al || s.album)?.blurPicUrl || '',
+  audioUrl: '', // 网易云无免费直链，触发跨源回退
+  duration: s.dt ? Math.round(s.dt / 1000) : (s.duration || 0),
+  album: (s.al || s.album)?.name || '',
+});
+
+/** QQ 音乐曲目映射 */
+const mapQQMusic = (s) => {
+  const mid = s.mid || s.songmid || '';
+  return {
+    source: 'qqmusic',
+    trackId: mid,
+    title: s.name || s.title || '未知标题',
+    artist: (s.singer || []).map(a => a.name).join(', '),
+    cover: mid ? `https://y.gtimg.cn/music/photo_new/T002R300x300M000${mid}.jpg` : '',
+    audioUrl: '', // QQ 音乐需鉴权，触发跨源回退
+    duration: +s.interval || +s.duration || 0,
+    album: (s.album || {}).name || '',
+  };
+};
+
+// ─────────────── 内置音源适配器 ───────────────
 export const adapters = {
   jamendo: {
     label: 'Jamendo · 正版 CC 曲库',
@@ -226,6 +311,97 @@ export const adapters = {
     search: async (q) => {
       const j = await get('archive/advancedsearch.php?output=json&rows=12&fl%5B%5D=identifier&fl%5B%5D=title&fl%5B%5D=creator&q=' + encodeURIComponent(q + ' AND mediatype:(audio) AND format:(MP3)'));
       return (((j || {}).response || {}).docs || []).map(mapArchive);
+    },
+  },
+
+  // ─────────────── A类：官方稳定 API ───────────────
+
+  spotify: {
+    label: 'Spotify · 全球最大流媒体',
+    search: async (q) => {
+      const j = await get('spotify/search?q=' + encodeURIComponent(q) + '&type=track&limit=12&market=CN');
+      return ((j.tracks || {}).items || []).map(mapSpotify);
+    },
+    trending: async () => {
+      // Spotify 新发行专辑 → 取前12首代表曲
+      const j = await get('spotify/browse/new-releases?country=CN&limit=12');
+      const albums = ((j.albums || {}).items || []);
+      return albums.map((a) => ({
+        source: 'spotify',
+        trackId: a.id,
+        title: a.name,
+        artist: (a.artists || []).map(x => x.name).join(', '),
+        cover: a.images?.[0]?.url || '',
+        audioUrl: '',
+        duration: 0,
+        album: a.name,
+      }));
+    },
+  },
+
+  lastfm: {
+    label: 'Last.fm · 全球音乐图谱',
+    search: async (q) => {
+      const j = await get('lastfm?method=track.search&track=' + encodeURIComponent(q) + '&limit=12');
+      return ((j.results?.trackmatches?.track) || []).map(mapLastfm);
+    },
+    trending: async () => {
+      const j = await get('lastfm?method=chart.gettoptracks&limit=12');
+      return ((j.tracks?.track) || []).map(mapLastfm);
+    },
+  },
+
+  musicbrainz: {
+    label: 'MusicBrainz · 开放音乐数据库',
+    search: async (q) => {
+      const j = await get('musicbrainz/recording?query=' + encodeURIComponent(q) + '&limit=12');
+      return (j.recordings || []).map(mapMusicBrainz);
+    },
+    // MusicBrainz 无热榜，不提供 trending
+  },
+
+  // ─────────────── B类：增强曲库 API ───────────────
+
+  jiosaavn: {
+    label: 'JioSaavn · 完整播放源',
+    search: async (q) => {
+      const j = await get('jiosaavn/search/songs?query=' + encodeURIComponent(q) + '&limit=12');
+      return ((j.data?.results) || []).map(mapJioSaavn).filter(t => t.audioUrl);
+    },
+    trending: async () => {
+      // JioSaavn 印度热榜
+      const j = await get('jiosaavn/playlists?id=1134543960&limit=12');
+      return ((j.data?.songs) || []).map(mapJioSaavn).filter(t => t.audioUrl);
+    },
+  },
+
+  netease: {
+    label: '网易云音乐 · 中文曲库（非官方）',
+    search: async (q) => {
+      const j = await get('netease/search?q=' + encodeURIComponent(q) + '&limit=12');
+      const songs = (j.result?.songs) || [];
+      return songs.map(mapNetease);
+    },
+    trending: async () => {
+      const j = await get('netease/trending');
+      // 飙升榜歌曲列表
+      const tracks = (j.result?.playlist?.tracks) || (j.playlist?.tracks) || [];
+      return tracks.slice(0, 12).map(mapNetease);
+    },
+  },
+
+  qqmusic: {
+    label: 'QQ音乐 · 中文曲库（非官方）',
+    search: async (q) => {
+      const j = await get('qqmusic/search?q=' + encodeURIComponent(q) + '&num=12');
+      const songs = (j.req_1?.data?.body?.song?.list) || [];
+      return songs.map(mapQQMusic);
+    },
+    trending: async () => {
+      const j = await get('qqmusic/trending');
+      // QQ 热歌榜
+      const songs = (j.songlist) || [];
+      return songs.slice(0, 12).map(s => mapQQMusic(s.data || s));
     },
   },
 };
@@ -403,7 +579,9 @@ export function dailyRecommend(history, n = 12) {
 /** 在当前音源外的已启用音源中，搜索同名完整版（优先时长最长） */
 export async function findAlternative(track) {
   const all = allSources();
-  const enabled = enabledSources().filter((k) => k !== track.source);
+  // 优先在有直链的音源中找（排除 lastfm / musicbrainz / netease / qqmusic 这些无直链源）
+  const NO_AUDIO_SOURCES = new Set(['lastfm', 'musicbrainz', 'netease', 'qqmusic']);
+  const enabled = enabledSources().filter((k) => k !== track.source && !NO_AUDIO_SOURCES.has(k));
   if (!enabled.length) return null;
   const q = (track.title || '') + ' ' + (track.artist || '');
   const settled = await Promise.allSettled(
