@@ -1,5 +1,5 @@
 // AirBeat Service Worker — 静态资源离线缓存 + 网络优先策略
-const CACHE = 'airbeat-v1';
+const CACHE = 'airbeat-v2';
 const STATIC = [
   '/',
   '/index.html',
