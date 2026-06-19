@@ -319,18 +319,19 @@ const mapNetease = (s) => ({
 
 /** QQ 音乐曲目映射 */
 const mapQQMusic = (s) => {
-    const mid = s.mid || s.songmid || '';
+  const mid = s.mid || s.songmid || '';
   return {
     source: 'qqmusic',
-    trackId: mid,
-    title: s.name || s.title || '未知标题',
+    trackId: String(s.mid || s.songmid || s.id || ''),
+    title: s.title || s.name || s.songname || '未知标题',
     artist: (s.singer || []).map((a) => a.name).join(', '),
     cover: mid ? 'https://y.gtimg.cn/music/photo_new/T002R300x300M000' + mid + '.jpg' : '',
     audioUrl: '',
-    duration: +s.interval || +s.duration || 0,
-    album: (s.album || {}).name || '',
+    duration: s.interval || s.duration || 0,
+    album: (s.album && s.album.name) || s.albumname || '',
   };
 };
+
  /* ─────────────── GD音乐台聚合源 · 通用 mapper ─────────────── */
 // Meting 标准返回:{ id, name, artist:[], album, pic_id, url_id, lyric_id, source }
 function mapGDStudio(s, subSource) {
