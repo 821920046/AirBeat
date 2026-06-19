@@ -322,18 +322,65 @@ const mapNetease = (s) => ({
 
 /** QQ 音乐曲目映射 */
 const mapQQMusic = (s) => {
-  const mid = s.mid || s.songmid || '';
+ /* ─────────────── GD音乐台聚合源 · 通用 mapper ─────────────── */
+// Meting 标准返回:{ id, name, artist:[], album, pic_id, url_id, lyric_id, source }
+function mapGDStudio(s, subSource) {
+  const artist = Array.isArray(s.artist) ? s.artist.join(', ') : (s.artist || '');
+  // 封面经代理懒加载,避免 N+1 请求阻塞
+  const cover = s.pic_id
+    ? '/api/proxy/gdstudio?types=pic&source=' + subSource
+        + '&id=' + encodeURIComponent(s.pic_id) + '&size=300'
+    : '';
   return {
-    source: 'qqmusic',
-    trackId: mid,
-    title: s.name || s.title || '未知标题',
-    artist: (s.singer || []).map(a => a.name).join(', '),
-    cover: mid ? `https://y.gtimg.cn/music/photo_new/T002R300x300M000${mid}.jpg` : '',
-    audioUrl: '', // QQ 音乐需鉴权，触发跨源回退
-    duration: +s.interval || +s.duration || 0,
-    album: (s.album || {}).name || '',
+    source: 'gdstudio_' + subSource,
+    trackId: subSource + ':' + s.url_id,
+    title: s.name || '未知标题',
+    artist,
+    album: s.album || '',
+    cover,
+    // 播放时由代理解析真实直链
+    audioUrl: '/api/proxy/gdurl?source=' + subSource
+      + '&id=' + encodeURIComponent(s.url_id) + '&br=320',
+    duration: 0,
+    _gd: { sub: subSource, urlId: s.url_id, lyricId: s.lyric_id },
   };
-};
+}
+
+function makeGDSource(subSource, label) {
+  const key = 'gdstudio_' + subSource;
+  return {
+    label,
+    search: async (q) => {
+      const list = await get(
+        'gdstudio?types=search&source=' + subSource
+          + '&name=' + encodeURIComponent(q) + '&count=12&pages=1',
+        key,
+      );
+      return (Array.isArray(list) ? list : []).map(s => mapGDStudio(s, subSource));
+    },
+    trending: async () => {
+      // GD 无统一榜单接口,用一个热门关键词代替(可自定义)
+      const list = await get(
+        'gdstudio?types=search&source=' + subSource
+          + '&name=' + encodeURIComponent('华语流行') + '&count=12&pages=1',
+        key,
+      );
+      return (Array.isArray(list) ? list : []).map(s => mapGDStudio(s, subSource));
+    },
+  };
+}
+
+function buildGDSources() {
+  return {
+    gdstudio_netease: makeGDSource('netease', 'GD-网易云 · 华语主力'),
+    gdstudio_kugou:   makeGDSource('kugou',   'GD-酷狗'),
+    gdstudio_migu:    makeGDSource('migu',    'GD-咪咕'),
+    gdstudio_baidu:   makeGDSource('baidu',   'GD-百度'),
+    gdstudio_ytmusic: makeGDSource('ytmusic', 'GD-YouTube Music'),
+    gdstudio_tidal:   makeGDSource('tidal',   'GD-Tidal · 高音质'),
+    gdstudio_qobuz:   makeGDSource('qobuz',   'GD-Qobuz · 母带'),
+  };
+}
 // ─────────────── 内置音源适配器 ───────────────
 export const adapters = {
   jamendo: {
