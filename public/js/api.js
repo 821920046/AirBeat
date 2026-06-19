@@ -312,7 +312,7 @@ const mapNetease = (s) => ({
   title: s.name || '未知标题',
   artist: (s.ar || s.artists || []).map(a => a.name).join(', '),
   cover: (s.al || s.album)?.picUrl || (s.al || s.album)?.blurPicUrl || '',
-  audioUrl: '', // 网易云无免费直链，触发跨源回退
+  audioUrl: '/api/proxy/stream?url=' + encodeURIComponent('https://music.163.com/song/media/outer/url?id=' + s.id + '.mp3'),
   duration: s.dt ? Math.round(s.dt / 1000) : (s.duration || 0),
   album: (s.al || s.album)?.name || '',
 });
