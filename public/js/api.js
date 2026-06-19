@@ -1,7 +1,5 @@
 const proxy = (p) => '/api/proxy/' + p;
 export const streamUrl = (u) => (u ? '/api/proxy/stream?url=' + encodeURIComponent(u) : '');
-
-
 /* ============== 会话级熔断器 ============== */
 // 一旦某音源 501(未配置)或连续 3 次 5xx/530,本会话内不再请求它
 const _disabledSources = new Set();
