@@ -671,7 +671,7 @@ export function allSources() {
 export function enabledSources() {
   const disabled = getSourceConfig().disabled;
   const all = allSources();
-  return Object.keys(all).filter((k) => !disabled.includes(k));
+  return Object.keys(all).filter((k) => !disabled.includes(k) && !isSourceDisabled(k));
 }
 
 export async function searchAll(q) {
