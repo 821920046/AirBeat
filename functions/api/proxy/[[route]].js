@@ -8,6 +8,7 @@ const SOURCES = {
   lastfm: 'https://ws.audioscrobbler.com/2.0',
   musicbrainz: 'https://musicbrainz.org/ws/2',
   jiosaavn: 'https://saavn.dev/api',
+  gdstudio: 'https://music-api.gdstudio.xyz', // ⬅ 新增 · GD音乐台聚合源
 };
 
 function pass(upstream, keys) {
@@ -198,7 +199,58 @@ export async function onRequestGet({ request, env, params }) {
     , 300);
     return pass(upstream, ['content-type']);
   }
+ // ─── GD音乐台 · Meting 聚合源(免 Key,华语主力)───
+// 用法:/api/proxy/gdstudio?types=search&source=netease&name=KEY&count=12&pages=1
+// 子源:netease | kugou | baidu | migu | tidal | qobuz | ytmusic | deezer
+if (route[0] === 'gdstudio') {
+  const target = new URL('https://music-api.gdstudio.xyz/api.php');
+  url.searchParams.forEach((v, k) => target.searchParams.append(k, v));
+  const cacheKey = new Request(request.url, { method: 'GET' });
+  const upstream = await cachedFetch(cacheKey, () =>
+    fetchWithTimeout(target.toString(), {
+      headers: {
+        'User-Agent': 'airbeat/1.0',
+        'Referer': 'https://music.gdstudio.xyz/',
+      },
+    }), 300);
+  return pass(upstream, ['content-type']);
+}
 
+// ─── GD音乐台 · 播放时解析直链(302 到 stream 代理,保留 Range)───
+// 用法:audioUrl = '/api/proxy/gdurl?source=netease&id=<url_id>&br=320'
+if (route[0] === 'gdurl') {
+  const src = url.searchParams.get('source') || 'netease';
+  const id  = url.searchParams.get('id')     || '';
+  const br  = url.searchParams.get('br')     || '320';
+  if (!id) return new Response('missing id', { status: 400 });
+  // 注意:用字符串拼接,避免反引号模板字符串渲染问题
+  const api = 'https://music-api.gdstudio.xyz/api.php?types=url'
+    + '&source=' + encodeURIComponent(src)
+    + '&id='     + encodeURIComponent(id)
+    + '&br='     + encodeURIComponent(br);
+  try {
+    const r = await fetchWithTimeout(api, {
+      headers: { 'User-Agent': 'airbeat/1.0', 'Referer': 'https://music.gdstudio.xyz/' },
+    }, 8000);
+    const j = await r.json();
+    const real = j && j.url;
+    if (!real || typeof real !== 'string' || !/^https?:\/\//.test(real)) {
+      return new Response(JSON.stringify({ error: '无可用直链' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+      });
+    }
+    // 重定向到 stream 代理,保留 Range/拖动能力
+    const streamUrl = new URL('/api/proxy/stream', request.url);
+    streamUrl.searchParams.set('url', real);
+    return Response.redirect(streamUrl.toString(), 302);
+  } catch (err) {
+    return new Response(JSON.stringify({ error: 'GD解析失败: ' + err.message }), {
+      status: 502,
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+    });
+  }
+}
   // ─── 通用路由（jamendo / audius / deezer / archive / radio / lrclib）───
   const base = SOURCES[route[0]];
   if (!base) return new Response('unknown source', { status: 404 });
