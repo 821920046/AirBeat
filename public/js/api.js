@@ -817,28 +817,6 @@ export async function findAlternative(track) {
   }
   return null;
 }
-  if (!enabled.length) return null;
-  const q = (track.title || '') + ' ' + (track.artist || '');
-  const settled = await Promise.allSettled(
-    enabled.map((k) => (all[k].search ? all[k].search(q) : Promise.resolve([]))),
-  );
-  const titleNorm = normalizeTitle(track.title);
-  if (!titleNorm) return null;
-  const candidates = [];
-  for (let i = 0; i < enabled.length; i++) {
-    if (settled[i].status !== 'fulfilled') continue;
-    for (const t of settled[i].value) {
-      if (!t.audioUrl) continue;
-      const tNorm = normalizeTitle(t.title);
-      if (tNorm === titleNorm || (titleNorm.length >= 4 && tNorm.includes(titleNorm)) || (tNorm.length >= 4 && titleNorm.includes(tNorm))) {
-        candidates.push(t);
-      }
-    }
-  }
-  // 优先取时长最长的（完整版 > 试听片段）
-  candidates.sort((a, b) => (b.duration || 0) - (a.duration || 0));
-  return candidates[0] || null;
-}
 
 export async function fetchLyrics(t) {
   // 一级:LRCLIB(同步歌词最优)
