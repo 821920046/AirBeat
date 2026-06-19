@@ -649,7 +649,7 @@ export function dailyRecommend(history, n = 12) {
 /** 在其他已启用且有直链的音源中,搜同名完整版(优先 GD-网易云 / 酷狗,然后才是西方源)*/
 export async function findAlternative(track) {
   const all = allSources();
-  const NO_AUDIO_SOURCES = new Set(['lastfm', 'musicbrainz', 'netease', 'qqmusic']);
+  const NO_AUDIO_SOURCES = new Set([ 'lastfm', 'musicbrainz', 'qqmusic' ]);
   // 候选排序:GD 系列(华语命中率最高)→ JioSaavn → Audius → Jamendo → Spotify(只有 preview)→ 其余
   const priority = [
     'gdstudio_netease', 'gdstudio_kugou', 'gdstudio_migu', 'gdstudio_baidu',
