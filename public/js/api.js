@@ -748,12 +748,65 @@ export function dailyRecommend(history, n = 12) {
   return recs;
 }
 
-/** 在当前音源外的已启用音源中，搜索同名完整版（优先时长最长） */
+/** 在其他已启用且有直链的音源中,搜同名完整版(优先 GD-网易云 / 酷狗,然后才是西方源)*/
 export async function findAlternative(track) {
   const all = allSources();
-  // 优先在有直链的音源中找（排除 lastfm / musicbrainz / netease / qqmusic 这些无直链源）
   const NO_AUDIO_SOURCES = new Set(['lastfm', 'musicbrainz', 'netease', 'qqmusic']);
-  const enabled = enabledSources().filter((k) => k !== track.source && !NO_AUDIO_SOURCES.has(k));
+  // 候选排序:GD 系列(华语命中率最高)→ JioSaavn → Audius → Jamendo → Spotify(只有 preview)→ 其余
+  const priority = [
+    'gdstudio_netease', 'gdstudio_kugou', 'gdstudio_migu', 'gdstudio_baidu',
+    'gdstudio_ytmusic', 'gdstudio_tidal', 'gdstudio_qobuz',
+    'jiosaavn', 'audius', 'jamendo', 'spotify',
+  ];
+  const enabledSet = new Set(enabledSources());
+  const candidates = priority.filter(k =>
+    enabledSet.has(k) &&
+    k !== track.source &&
+    !NO_AUDIO_SOURCES.has(k) &&
+    !isSourceDisabled(k)
+  );
+  // 兜底:把候选名单以外但启用的源也加进来,但放后面
+  for (const k of enabledSet) {
+    if (!candidates.includes(k) && k !== track.source &&
+        !NO_AUDIO_SOURCES.has(k) && !isSourceDisabled(k) && all[k]?.search) {
+      candidates.push(k);
+    }
+  }
+  if (!candidates.length) return null;
+
+  const q = (track.title || '') + ' ' + (track.artist || '');
+  const titleNorm = normalizeTitle(track.title);
+  if (!titleNorm) return null;
+
+  // 串行尝试:命中即返回,避免一次性并发拉爆所有源
+  for (const k of candidates) {
+    let list = [];
+    try {
+      list = await all[k].search(q);
+    } catch {
+      continue; // 失败计入熔断器,不在这里处理
+    }
+    if (!Array.isArray(list)) continue;
+    // 找最佳匹配
+    const hits = [];
+    for (const t of list) {
+      if (!t.audioUrl) continue;
+      const tNorm = normalizeTitle(t.title);
+      if (
+        tNorm === titleNorm ||
+        (titleNorm.length >= 4 && tNorm.includes(titleNorm)) ||
+        (tNorm.length >= 4 && titleNorm.includes(tNorm))
+      ) {
+        hits.push(t);
+      }
+    }
+    if (hits.length) {
+      hits.sort((a, b) => (b.duration || 0) - (a.duration || 0));
+      return hits[0];
+    }
+  }
+  return null;
+}
   if (!enabled.length) return null;
   const q = (track.title || '') + ' ' + (track.artist || '');
   const settled = await Promise.allSettled(
