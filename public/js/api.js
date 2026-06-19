@@ -831,11 +831,26 @@ export async function findAlternative(track) {
 }
 
 export async function fetchLyrics(t) {
+  // 一级:LRCLIB(同步歌词最优)
   try {
-    const list = await get('lrclib/search?track_name=' + encodeURIComponent(t.title || '') + '&artist_name=' + encodeURIComponent(t.artist || ''));
+    const list = await get(
+      'lrclib/search?track_name=' + encodeURIComponent(t.title || '')
+        + '&artist_name=' + encodeURIComponent(t.artist || ''),
+      'lrclib',
+    );
     const hit = (list || []).find((x) => x.syncedLyrics);
-    return hit ? hit.syncedLyrics : null;
-  } catch {
-    return null;
+    if (hit) return hit.syncedLyrics;
+  } catch {}
+  // 二级:GD 音乐台(华语命中率高)
+  if (t._gd?.lyricId && t._gd?.sub) {
+    try {
+      const j = await get(
+        'gdstudio?types=lyric&source=' + t._gd.sub
+          + '&id=' + encodeURIComponent(t._gd.lyricId),
+        'gdstudio_' + t._gd.sub,
+      );
+      if (j?.lyric) return j.lyric;
+    } catch {}
   }
+  return null;
 }
