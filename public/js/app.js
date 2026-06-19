@@ -588,9 +588,11 @@ view.addEventListener('click', async (e) => {
   }
   const card = e.target.closest('[data-g]');
   if (!card) return;
-  const track = groups[+card.dataset.g][+card.dataset.i];
+const grp = groups[+card.dataset.g];
+if (!grp) return;
+  const track = grp[+card.dataset.i];
   if (!track) return;
-  if (!act || act === 'play') { player.playQueue(groups[+card.dataset.g], +card.dataset.i); return; }
+  if (!act || act === 'play') { player.playQueue(grp, +card.dataset.i); return; }
   if (act === 'fav') {
     const added = await store.toggleFavorite(track).catch(() => null);
     if (added !== null) { actBtn.textContent = added ? '❤' : '♡'; toast(added ? '已收藏' : '已取消收藏'); }
