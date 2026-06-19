@@ -334,7 +334,91 @@ const mapQQMusic = (s) => {
     album: (s.album || {}).name || '',
   };
 };
+// ─────────────── 内置音源适配器 ───────────────
+export const adapters = {
+  jamendo: {
+    label: 'Jamendo · 正版 CC 曲库',
+    search:   async (q) => (((await get('jamendo/tracks/?format=json&limit=12&search=' + encodeURIComponent(q), 'jamendo')).results) || []).map(mapJamendo),
+    trending: async ()  => (((await get('jamendo/tracks/?format=json&limit=12&order=popularity_week', 'jamendo')).results) || []).map(mapJamendo),
+  },
+  audius: {
+    label: 'Audius · 独立音乐',
+    search:   async (q) => (((await get('audius/tracks/search?query=' + encodeURIComponent(q), 'audius')).data) || []).slice(0, 12).map(mapAudius),
+    trending: async ()  => (((await get('audius/tracks/trending?limit=12', 'audius')).data) || []).slice(0, 12).map(mapAudius),
+  },
+  archive: {
+    label: 'Internet Archive · 公有领域',
+    search: async (q) => {
+      const j = await get('archive/advancedsearch.php?output=json&rows=12&fl%5B%5D=identifier&fl%5B%5D=title&fl%5B%5D=creator&q=' + encodeURIComponent(q + ' AND mediatype:(audio) AND format:(MP3)'), 'archive');
+      return (((j || {}).response || {}).docs || []).map(mapArchive);
+    },
+  },
+  // ─────────────── A类:官方稳定 API ───────────────
+  spotify: {
+    label: 'Spotify · 全球最大流媒体',
+    search: async (q) => {
+      const j = await get('spotify/search?q=' + encodeURIComponent(q) + '&type=track&limit=12&market=CN', 'spotify');
+      return ((j.tracks || {}).items || []).map(mapSpotify);
+    },
+    trending: async () => {
+      const j = await get('spotify/browse/new-releases?country=CN&limit=12', 'spotify');
+      const albums = ((j.albums || {}).items || []);
+      return albums.map((a) => ({
+        source: 'spotify',
+        trackId: a.id,
+        title: a.name,
+        artist: (a.artists || []).map(x => x.name).join(', '),
+        cover: a.images?.[0]?.url || '',
+        audioUrl: '',
+        duration: 0,
+        album: a.name,
+      }));
+    },
+  },
+  lastfm: {
+    label: 'Last.fm · 全球音乐图谱',
+    search:   async (q) => (((await get('lastfm?method=track.search&track=' + encodeURIComponent(q) + '&limit=12', 'lastfm')).results?.trackmatches?.track) || []).map(mapLastfm),
+    trending: async ()  => (((await get('lastfm?method=chart.gettoptracks&limit=12', 'lastfm')).tracks?.track) || []).map(mapLastfm),
+  },
+  musicbrainz: {
+    label: 'MusicBrainz · 开放音乐数据库',
+    search: async (q) => ((await get('musicbrainz/recording?query=' + encodeURIComponent(q) + '&limit=12', 'musicbrainz')).recordings || []).map(mapMusicBrainz),
+  },
+  // ─────────────── B类:增强曲库 API ───────────────
+  jiosaavn: {
+    label: 'JioSaavn · 完整播放源',
+    search:   async (q) => (((await get('jiosaavn/search/songs?query=' + encodeURIComponent(q) + '&limit=12', 'jiosaavn')).data?.results) || []).map(mapJioSaavn).filter(t => t.audioUrl),
+    trending: async ()  => (((await get('jiosaavn/playlists?id=1134543960&limit=12', 'jiosaavn')).data?.songs) || []).map(mapJioSaavn).filter(t => t.audioUrl),
+  },
+  netease: {
+    label: '网易云音乐 · 中文曲库(非官方)',
+    search: async (q) => {
+      const j = await get('netease/search?q=' + encodeURIComponent(q) + '&limit=12', 'netease');
+      return ((j.result?.songs) || []).map(mapNetease);
+    },
+    trending: async () => {
+      const j = await get('netease/trending', 'netease');
+      const tracks = (j.result?.playlist?.tracks) || (j.playlist?.tracks) || [];
+      return tracks.slice(0, 12).map(mapNetease);
+    },
+  },
+  qqmusic: {
+    label: 'QQ音乐 · 中文曲库(非官方)',
+    search: async (q) => {
+      const j = await get('qqmusic/search?q=' + encodeURIComponent(q) + '&num=12', 'qqmusic');
+      const songs = (j.req_1?.data?.body?.song?.list) || [];
+      return songs.map(mapQQMusic);
+    },
+    trending: async () => {
+      const j = await get('qqmusic/trending', 'qqmusic');
+      const songs = (j.songlist) || [];
+      return songs.slice(0, 12).map(s => mapQQMusic(s.data || s));
+    },
+  },
 
+  // ─────────────── C类:GD音乐台(免Key,华语主力)───────────────
+  ...buildGDSources(),
+};
 // ─────────────── 内置音源适配器 ───────────────
 export const adapters = {
   jamendo: {
