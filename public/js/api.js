@@ -1,9 +1,55 @@
 const proxy = (p) => '/api/proxy/' + p;
 export const streamUrl = (u) => (u ? '/api/proxy/stream?url=' + encodeURIComponent(u) : '');
+const proxy = (p) => '/api/proxy/' + p;
+export const streamUrl = (u) => (u ? '/api/proxy/stream?url=' + encodeURIComponent(u) : '');
 
-async function get(p) {
+/* ============== 会话级熔断器 ============== */
+// 一旦某音源 501(未配置)或连续 3 次 5xx/530,本会话内不再请求它
+const _disabledSources = new Set();
+const _failCounts = new Map();
+const FAIL_THRESHOLD = 3;
+
+export function isSourceDisabled(name) {
+  return _disabledSources.has(name);
+}
+export function disableSource(name, reason) {
+  if (!name || _disabledSources.has(name)) return;
+  _disabledSources.add(name);
+  console.warn('[音源熔断] ' + name + ' 已禁用: ' + (reason || ''));
+  try {
+    window.dispatchEvent(new CustomEvent('source-disabled', { detail: { name, reason } }));
+  } catch {}
+}
+export function resetDisabledSources() {
+  _disabledSources.clear();
+  _failCounts.clear();
+}
+export function listDisabledSources() {
+  return Array.from(_disabledSources);
+}
+
+async function get(p, sourceName) {
+  // 已熔断 → 立即抛错,不发请求,避免请求风暴
+  if (sourceName && _disabledSources.has(sourceName)) {
+    throw new Error('source disabled: ' + sourceName);
+  }
   const r = await fetch(proxy(p));
-  if (!r.ok) throw new Error('proxy ' + p + ' ' + r.status);
+  if (!r.ok) {
+    if (sourceName) {
+      if (r.status === 501) {
+        // 未配置 Key → 直接禁用本会话
+        disableSource(sourceName, '未配置 (501)');
+      } else if (r.status === 530 || r.status >= 500) {
+        const n = (_failCounts.get(sourceName) || 0) + 1;
+        _failCounts.set(sourceName, n);
+        if (n >= FAIL_THRESHOLD) {
+          disableSource(sourceName, '上游连续失败 ' + n + ' 次');
+        }
+      }
+    }
+    throw new Error('proxy ' + p + ' ' + r.status);
+  }
+  if (sourceName) _failCounts.delete(sourceName); // 成功重置计数
   return r.json();
 }
 
